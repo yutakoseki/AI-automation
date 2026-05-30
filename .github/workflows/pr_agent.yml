@@ -1,0 +1,21 @@
+name: AI PR Agent
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+
+jobs:
+  pr_agent_job:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+      contents: parse
+    name: Run pr-agent
+    steps:
+      - name: PR Agent Action
+        uses: Codium-ai/pr-agent@main
+        env:
+          OPENAI_KEY: ${{ secrets.OPENAI_KEY }} # OpenAIのAPIキーを使う場合
+          # ※GitHub Copilotのトークンを利用する場合は設定方法が異なりますが、
+          # 通常はOpenAIかAnthropicのAPIキーをRepository Secretsに登録します。
