@@ -17,7 +17,12 @@ export default function Home() {
   const [todos, setTodos] = useState<Todo[]>([]);
   const [input, setInput] = useState("");
 
-  /** 新規 TODO を追加 */
+  /** すべての TODO を完了にする */
+  const handleMarkAllComplete = () => {
+    setTodos((prev) =>
+      prev.map((todo) => ({ ...todo, completed: true }))
+    );
+  };
   const handleAdd = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const text = input.trim();
@@ -77,7 +82,10 @@ export default function Home() {
             </button>
           </form>
 
-          {/* 件数サマリー */}
+          {/* 一括完了ボタン */}
+          <button onClick={handleMarkAllComplete} className={styles.completeAllButton}>
+            すべて完了
+          </button>
           <p className={styles.summary}>
             未完了: {remainingCount} / 全 {todos.length} 件
           </p>
