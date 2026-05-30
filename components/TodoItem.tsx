@@ -18,10 +18,12 @@ type TodoItemProps = {
  */
 export default function TodoItem({ todo, onToggle, onDelete, onEdit }: TodoItemProps) {
   const [isEditing, setIsEditing] = useState(false);
-  const [editText, setEditText] = useState(todo.text);
+  const [editTitle, setEditTitle] = useState(todo.title);
+  const [editDetails, setEditDetails] = useState(todo.details);
+  const [editDeadline, setEditDeadline] = useState(todo.deadline);
 
   const handleEditSave = () => {
-    onEdit(todo.id, editText);
+    onEdit(todo.id, editTitle, editDetails, editDeadline);
     setIsEditing(false);
   };
 
@@ -34,11 +36,27 @@ export default function TodoItem({ todo, onToggle, onDelete, onEdit }: TodoItemP
           onChange={() => onToggle(todo.id)}
           className={styles.checkbox}
         />
+        <strong>{todo.title}</strong>
+        <p>{todo.details}</p>
+        <small>Deadline: {todo.deadline}</small>
         {isEditing ? (
           <input
             type="text"
-            value={editText}
-            onChange={(e) => setEditText(e.target.value)}
+            value={editTitle}
+            onChange={(e) => setEditTitle(e.target.value)}
+            className={styles.editInput}
+            placeholder="タイトルを編集..."
+          />
+          <textarea
+            value={editDetails}
+            onChange={(e) => setEditDetails(e.target.value)}
+            className={styles.editTextarea}
+            placeholder="詳細を編集..."
+          />
+          <input
+            type="date"
+            value={editDeadline}
+            onChange={(e) => setEditDeadline(e.target.value)}
             className={styles.editInput}
           />
         ) : (
