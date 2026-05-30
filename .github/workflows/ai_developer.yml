@@ -69,12 +69,11 @@ jobs:
           - 最後に必ず実装した内容の要約（Summary）を英語または日本語で出力してください。
           " --yes --no-auto-commits
 
-          # 【重要改善】AIの作業終了直後、まず問答無用で全ファイルをステージング（git add）
-          # これにより、既存ファイルの内部書き換えをGitに確実に認識させます
-          git add .
-
-          # ステージング（インデックス）に変更されたファイル（差分）が存在するかチェック
-          if [ -n "$(git diff --cached --name-only)" ]; then
+          # 【確実な改善】現在の作業ディレクトリに「変更（未コミットの差分）」があるかを直接チェック
+          if [ -n "$(git status --porcelain)" ]; then
+            # 変更があった場合：すべてのファイルをステージングエリアに追加
+            git add .
+            
             # 変更内容をコミット（メッセージにIssue番号を自動埋め込み）
             git commit -m "feat: implemented by AI for Issue #${{ github.event.issue.number }}"
             
