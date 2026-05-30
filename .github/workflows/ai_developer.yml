@@ -12,19 +12,19 @@ permissions:
 
 jobs:
   implement:
-    # 貼られたラベルの名前が「ai-ready」である時だけ、この先のAI処理を実行する（それ以外は即座にスキップ）
+    # 貼られたラベルの名前が「ai-ready」である時だけ、この先のAI処理を実行する
     if: github.event.label.name == 'ai-ready'
     runs-on: ubuntu-latest
-    timeout-minutes: 20 # 念のためのAI暴走・コスト爆発防止（20分で強制終了）
+    timeout-minutes: 20
 
     steps:
-      # 1. サーバー環境にリポジトリの全ソースコードをチェックアウト（ダウンロード）
+      # 1. サーバー環境にリポジトリの全ソースコードをチェックアウト
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      # 2. AIツール「Aider」を動かすためのPython環境（3.11）をセットアップ
+      # 2. AIツール「Aider」を動かすためのPython環境をセットアップ
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -38,48 +38,53 @@ jobs:
       - name: Run AI Coder (Aider)
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_KEY }} # 登録済みのOpenAIのAPIキー
-          GITHUB_TOKEN: ${{ secrets.AI_PAT }} # GitHub Fine-grained personal access tokens
+          GITHUB_TOKEN: ${{ secrets.AI_PAT }} # あなたが作った個人アクセストークン（PAT）
         run: |
-          # Gitのコミットログに記録されるユーザー名とメールアドレスを設定（GitHub公式のボットアカウントを指定）
+          # Gitのコミットログに記録されるユーザー名とメールアドレスを設定
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
-          # 今回のIssue番号を組み込んだ、AI専用の開発用ブランチ名を定義して作成・切り替え
+          # 今回のIssue番号を組み込んだ、AI専用の開発用ブランチを作成して切り替え
           BRANCH_NAME="ai-feature/issue-${{ github.event.issue.number }}"
           git checkout -b $BRANCH_NAME
 
-          # 【最強の自動実装コマンド】
+          # 【自動実装コマンド】
           aider --message "
-          [SYSTEM INSTRUCTION: AUTONOMOUS MODE] (システム指示：完全自律モード)
+          [SYSTEM INSTRUCTION: AUTONOMOUS MODE]
           - あなたはプロのエンジニアエージェントです。
           - もし必要なディレクトリやファイル、雛形コードが存在しない場合は、ゼロからすべて新規作成してください。
           - 人間への確認（確認入力の要求）は一切行わないでください。
-          - Issueで要求されている技術（Next.js等）のベストプラクティスに従ってコードを書いてください。
+          - Issueで要求されている技術（Next.js等）のベストプラティクスに従ってコードを書いてください。
 
-          [TASK] (タスク内容)
+          [TASK]
           Issueタイトル: ${{ github.event.issue.title }}
           Issue本文:
           ${{ github.event.issue.body }}
 
-          [OUTPUT REQUIREMENTS] (出力要件)
+          [OUTPUT REQUIREMENTS]
           - 新しいファイルが必要な場合は、迷わず即座に作成してください。
           - 作成・修正するコードは、手抜きせず、完全に動作する状態に仕上げてください。
           - 最後に必ず実装した内容の要約（Summary）を英語または日本語で出力してください。
           " --yes --no-auto-commits
 
+          # 【★認証エラー対策★】Gitの通信URLに、設定してもらったAI_PATを安全に直接注入します
+          git remote set-url origin "https://x-access-token:${{ secrets.AI_PAT }}@github.com/${{ github.repository }}.git"
+
           # AIの作業終了直後、まず問答無用で全ファイルをステージング（git add）
           git add .
 
-          # 【最終改善】現在の作業ディレクトリに変更（未コミットの差分）があるかチェック
+          # 現在の作業ディレクトリに変更（未コミットの差分）があるかチェック
           if [ -n "$(git status --porcelain)" ]; then
-            # 変更があった場合：コミットしてプッシュ、PRを作成
+            # 変更があった場合：コミットしてプッシュ
             git commit -m "feat: implemented by AI for Issue #${{ github.event.issue.number }}"
             git push -f origin $BRANCH_NAME
             
             # AI（Aider）が最後に出力した詳細ログからサマリーを自動抽出
             AI_SUMMARY=$(git log -1 --pretty=%B)
             
-            # GitHub CLIを使ってプルリクエストを綺麗に作成
+            # GitHub CLI（ghコマンド）を使ってプルリクエストを作成
+            # トークンを環境変数として明示的にghコマンドに渡します
+            export GH_TOKEN="${{ secrets.AI_PAT }}"
             gh pr create --title "[AI] ${{ github.event.issue.title }}" --body "
             ## 🎯 課題の概要
             Closes #${{ github.event.issue.number }}
@@ -93,7 +98,6 @@ jobs:
             - 不要な設定ファイルの書き換えや、パッケージの依存関係に変更が入っていないか念のためご確認ください。
             " --base main --head $BRANCH_NAME || echo "PR is already created or updated."
           else
-            # 【ここを修正！】変更がなかった場合：エラーにせず「すでに実装済み」として正常終了（緑のチェック）させる
             echo "既にリポジトリ内のコードは最新です。追加の変更は不要なため、処理を正常終了します。"
             exit 0
           fi
