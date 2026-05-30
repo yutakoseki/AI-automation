@@ -33,6 +33,7 @@ jobs:
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          AIDER_DARK_MODE: "true" # ログを見やすく
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
@@ -40,19 +41,24 @@ jobs:
           BRANCH_NAME="ai-feature/issue-${{ github.event.issue.number }}"
           git checkout -b $BRANCH_NAME
 
-          # --auto-commit を付与し、プロンプトで「確認せずに即座にファイルを作成しろ」と命令します
+          # プロンプトの先頭に、ファイルを直接作成させる強い指示を与えます
+          # また、コミットメッセージもAIに自動生成させます
           aider --message "
-          You are in a non-interactive CI environment. Do not ask for confirmation.
-          Immediately create or modify the necessary files to solve this issue.
+          [CRITICAL: NON-INTERACTIVE CI ENVIRONMENT]
+          Do not ask any questions or confirmations. Just create and modify the files immediately.
 
-          【Issueタイトル】: ${{ github.event.issue.title }}
-          【Issue内容】:
+          Task: Implement the following GitHub Issue.
+          Title: ${{ github.event.issue.title }}
+          Body:
           ${{ github.event.issue.body }}
-          " --yes --auto-commit
+          " --yes --commit
 
-          # 万が一Aiderがコミットし忘れたときのために、安全策としてgit add/commitを挟む
-          git add .
-          git commit -m "feat: auto-implemented by AI for Issue #${{ github.event.issue.number }}" || true
+          # Aiderが万が一自動コミットし忘れた場合のセーフティネット
+          if [ -n "$(git status --porcelain)" ]; then
+            git add .
+            git commit -m "feat: auto-implemented by AI for Issue #${{ github.event.issue.number }}"
+          fi
 
+          # ブランチをプッシュしてPRを作成
           git push origin $BRANCH_NAME
           gh pr create --title "[AI] ${{ github.event.issue.title }}" --body "Closes #${{ github.event.issue.number }}\n\nAIによって自動生成されたプルリクエストです。" --base main --head $BRANCH_NAME
