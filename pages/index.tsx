@@ -1,4 +1,4 @@
-import { FormEvent, useState } from "react";
+import { FormEvent, useState, useEffect } from "react";
 import Head from "next/head";
 import TodoItem from "@/components/TodoItem";
 import type { Todo } from "@/types/todo";
@@ -15,6 +15,15 @@ function createId(): string {
  */
 export default function Home() {
   const [todos, setTodos] = useState<Todo[]>([]);
+  const [currentDateTime, setCurrentDateTime] = useState(new Date().toLocaleString());
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentDateTime(new Date().toLocaleString());
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, []);
   const [input, setInput] = useState("");
 
   /** 新規 TODO を追加 */
@@ -59,6 +68,9 @@ export default function Home() {
 
       <main className={styles.main}>
         <div className={styles.container}>
+          <div className={styles.dateTime}>
+            {currentDateTime}
+          </div>
           <h1 className={styles.title}>TODO App</h1>
           <p className={styles.subtitle}>テスト・実験用の最小構成サンプル</p>
 
