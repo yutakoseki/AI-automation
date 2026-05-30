@@ -13,7 +13,7 @@ jobs:
   implement:
     if: github.event.label.name == 'ai-ready'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
 
     steps:
       - name: Checkout repository
@@ -33,32 +33,47 @@ jobs:
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          AIDER_DARK_MODE: "true" # ログを見やすく
         run: |
+          # Gitのコミットログに記録されるユーザー名とメールアドレスを設定（GitHub公式のボットアカウントを指定）
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
+          # 今回のIssue番号を組み込んだ、AI専用の開発用ブランチ名を定義して作成・切り替え
           BRANCH_NAME="ai-feature/issue-${{ github.event.issue.number }}"
           git checkout -b $BRANCH_NAME
 
-          # プロンプトの先頭に、ファイルを直接作成させる強い指示を与えます
-          # また、コミットメッセージもAIに自動生成させます
+          # 【最強の自動実装コマンド】
+          # --yes: AIからの「実行していいですか？」という人間に向けた確認をすべて自動でパス
+          # --no-auto-commits: AIが1ファイル直すごとに細かくコミットするのを防ぎ、最後に一括でコミット（CI環境でのエラー防止と成功率向上のため）
           aider --message "
-          [CRITICAL: NON-INTERACTIVE CI ENVIRONMENT]
-          Do not ask any questions or confirmations. Just create and modify the files immediately.
+          [SYSTEM INSTRUCTION: AUTONOMOUS MODE] (システム指示：完全自律モード)
+          - あなたはプロのエンジニアエージェントです。
+          - もし必要なディレクトリ（フォルダ）やファイル、雛形コードが存在しない場合は、ゼロからすべて新規作成してください。
+          - 人間への確認（確認入力の要求）は一切行わないでください。
+          - Issueで要求されている技術（Next.js等）のベストプラクティスに従ってコードを書いてください。
 
-          Task: Implement the following GitHub Issue.
-          Title: ${{ github.event.issue.title }}
-          Body:
+          [TASK] (タスク内容)
+          Issueタイトル: ${{ github.event.issue.title }}
+          Issue本文:
           ${{ github.event.issue.body }}
-          " --yes --commit
 
-          # Aiderが万が一自動コミットし忘れた場合のセーフティネット
+          [OUTPUT REQUIREMENTS] (出力要件)
+          - 新しいファイルが必要な場合は、迷わず即座に作成してください。
+          - 作成・修正するコードは、手抜きせず、完全に動作する状態に仕上げてください。
+          " --yes --no-auto-commits
+
+          # AIの処理が終わり、リポジトリ内に「新しく作られたファイル」や「変更された差分」があるかチェック
           if [ -n "$(git status --porcelain)" ]; then
+            # 変更があった場合：すべてのファイルをステージングエリアに追加
             git add .
-            git commit -m "feat: auto-implemented by AI for Issue #${{ github.event.issue.number }}"
+            # 変更内容をコミット（メッセージにIssue番号を自動埋め込み）
+            git commit -m "feat: implemented by AI for Issue #${{ github.event.issue.number }}"
+            # 作成したAIブランチをGitHub（リモートリポジトリ）にプッシュ
+            git push origin $BRANCH_NAME
+            # GitHub CLI（ghコマンド）を使って、自動でプルリクエスト（PR）を作成して人間へ届ける
+            gh pr create --title "[AI] ${{ github.event.issue.title }}" --body "Closes #${{ github.event.issue.number }}\n\nAIによる自動実装・新規ファイル作成が完了しました。" --base main --head $BRANCH_NAME
+          else
+            # 変更が一切なかった場合：AIが何もファイルを作れずに失敗したとみなし、エラーログを出してActionsを異常終了させる
+            echo "No changes detected. AI might have failed to implement."
+            exit 1
           fi
-
-          # ブランチをプッシュしてPRを作成
-          git push origin $BRANCH_NAME
-          gh pr create --title "[AI] ${{ github.event.issue.title }}" --body "Closes #${{ github.event.issue.number }}\n\nAIによって自動生成されたプルリクエストです。" --base main --head $BRANCH_NAME
