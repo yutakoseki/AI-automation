@@ -1,0 +1,24 @@
+name: Auto AI Developer
+
+on:
+  issues:
+    types: [opened] # 人間がIssueを開いた瞬間に自動起動
+
+jobs:
+  auto_development:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 自律型AIエンジニアをバックグラウンドで起動
+      - name: Run AI coder
+        uses: stwise/mentat-action@main
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_KEY }} # あなたが登録したキー
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # GitHubが自動で出すのでRepository secretsへの登録不要！
