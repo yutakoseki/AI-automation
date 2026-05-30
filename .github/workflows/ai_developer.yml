@@ -1,0 +1,60 @@
+name: AI Issue Worker
+
+on:
+  issues:
+    types: [labeled]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  implement:
+    if: github.event.label.name == 'ai-ready'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-level: "3.11"
+
+      # 世界最強の自律型コーディングAI「Aider」をその場でインストール
+      - name: Install Aider
+        run: pip install aider-chat
+
+      # 完全にバックグラウンドでIssueを読み込み、実装からPR作成（コミット）まで自律実行
+      - name: Run AI Coder (Aider)
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_KEY }} # 登録済みのシークレット
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # AI用の名前とメールを設定
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+          # 新しい開発用ブランチを自動作成
+          BRANCH_NAME="ai-feature/issue-${{ github.event.issue.number }}"
+          git checkout -b $BRANCH_NAME
+
+          # AiderにIssueの内容を丸投げして、自律コーディング（自動コミットまで行う）
+          aider --message "
+          以下のGitHub Issueを解決するためにコードを実装または修正してください。
+
+          【Issueタイトル】: ${{ github.event.issue.title }}
+          【Issue内容】:
+          ${{ github.event.issue.body }}
+
+          ※テストコードがある場合はテストを実行し、エラーが出たら自己修正してください。
+          " --yes
+
+          # 変更があったらGitHubにプッシュし、自動でPRを作成
+          git push origin $BRANCH_NAME
+          gh pr create --title "[AI] ${{ github.event.issue.title }}" --body "Closes #${{ github.event.issue.number }}\n\nAIによって自動生成されたプルリクエストです。" --base main --head $BRANCH_NAME
