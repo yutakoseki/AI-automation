@@ -49,37 +49,52 @@ jobs:
           git checkout -b $BRANCH_NAME
 
           # 【最強の自動実装コマンド】
-          # --yes: AIからの「実行していいですか？」という人間に向けた確認をすべて自動でパス
-          # --no-auto-commits: AIが1ファイル直すごとに細かくコミットするのを防ぎ、最後に一括でコミット（CI環境でのエラー防止と成功率向上のため）
+          # OUTPUT REQUIREMENTSにて、プルリク用の変更サマリー（解説）を出力させる指示を追加しています
           aider --message "
-          [SYSTEM INSTRUCTION: AUTONOMOUS MODE] (システム指示：完全自律モード)
-          - あなたはプロのエンジニアエージェントです。
-          - もし必要なディレクトリ（フォルダ）やファイル、雛形コードが存在しない場合は、ゼロからすべて新規作成してください。
-          - 人間への確認（確認入力の要求）は一切行わないでください。
-          - Issueで要求されている技術（Next.js等）のベストプラクティスに従ってコードを書いてください。
+          [SYSTEM INSTRUCTION: AUTONOMOUS MODE]
+          - You are an expert developer agent.
+          - Create all necessary directories, files, and boilerplate code from scratch if they don't exist.
+          - DO NOT ASK FOR CONFIRMATION.
+          - Use best practices for the technology requested in the issue.
 
-          [TASK] (タスク内容)
-          Issueタイトル: ${{ github.event.issue.title }}
-          Issue本文:
+          [TASK]
+          Issue Title: ${{ github.event.issue.title }}
+          Issue Body:
           ${{ github.event.issue.body }}
 
-          [OUTPUT REQUIREMENTS] (出力要件)
-          - 新しいファイルが必要な場合は、迷わず即座に作成してください。
-          - 作成・修正するコードは、手抜きせず、完全に動作する状態に仕上げてください。
+          [OUTPUT REQUIREMENTS]
+          - Create or modify the required files immediately.
+          - At the very end of your work, write a clear summary of your changes (what you fixed, why, and what to watch out for).
           " --yes --no-auto-commits
 
           # AIの処理が終わり、リポジトリ内に「新しく作られたファイル」や「変更された差分」があるかチェック
           if [ -n "$(git status --porcelain)" ]; then
             # 変更があった場合：すべてのファイルをステージングエリアに追加
             git add .
-            # 変更内容をコミット（メッセージにIssue番号を自動埋め込み）
+            
+            # 変更履歴をコミットメッセージとして保存
             git commit -m "feat: implemented by AI for Issue #${{ github.event.issue.number }}"
             
-            # 【Git競合対策】過去の古い同名ブランチが残っていても、上書きで強制プッシュ（-f）する
+            # 過去の古い同名ブランチが残っていても、上書きで強制プッシュ（-f）する
             git push -f origin $BRANCH_NAME
             
-            # GitHub CLI（ghコマンド）を使って自動でプルリクエストを作成（既にPRがある場合は上書きまたはスキップ）
-            gh pr create --title "[AI] ${{ github.event.issue.title }}" --body "Closes #${{ github.event.issue.number }}\n\nAIによる自動実装・新規ファイル作成が完了しました。" --base main --head $BRANCH_NAME || echo "PR is already created or updated."
+            # AI（Aider）が最後に出力した詳細ログやGitの変更サマリーを自動抽出
+            AI_SUMMARY=$(git log -1 --pretty=%B)
+            
+            # GitHub CLI（ghコマンド）を使って自動でプルリクエストを作成
+            # 機械的な一言をやめ、「概要」「具体的な修正点」「注意点」を綺麗に構造化して流し込みます
+            gh pr create --title "[AI] ${{ github.event.issue.title }}" --body "
+            ## 🎯 課題の概要
+            Closes #${{ github.event.issue.number }}
+            Issue 「${{ github.event.issue.title }}」の要望に基づき、AIが自律開発を行いました。
+            
+            ## 🛠️ 今回の具体的な修正点
+            $AI_SUMMARY
+            
+            ## ⚠️ レビュアー（人間）への注意点・確認方法
+            - AIが自動生成したコードです。意図通りのロジックやデザインになっているか、画面上の「Files changed」タブで最終確認をお願いします。
+            - 不要な設定ファイルの書き換えや、パッケージの依存関係に変更が入っていないか念のためご確認ください。
+            " --base main --head $BRANCH_NAME || echo "PR is already created or updated."
           else
             # 変更が一切なかった場合：AIが何もファイルを作れずに失敗したとみなし、エラーログを出してActionsを異常終了させる
             echo "No changes detected. AI might have failed to implement."
