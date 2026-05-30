@@ -40,12 +40,15 @@ jobs:
           BRANCH_NAME="ai-feature/issue-${{ github.event.issue.number }}"
           git checkout -b $BRANCH_NAME
 
-          # Issueのタイトルと本文を一度環境変数に安全に退避させ、Aiderの引数誤認バグを防ぎます
-          export ISSUE_TITLE="${{ github.event.issue.title }}"
-          export ISSUE_BODY="${{ github.event.issue.body }}"
+          # 【最重要改善】長文やエラーログを安全に一時ファイルへ書き出す（ヒアドキュメントの保護）
+          cat << 'EOF' > issue_prompt.txt
+          Issueタイトル: ${{ github.event.issue.title }}
+          Issue本文:
+          ${{ github.event.issue.body }}
+          EOF
 
-          # 【修正箇所】--message の中身を極力シンプルにし、環境変数経由でタスクを安全に注入
-          aider --message "修正タスクを開始してください。Issueタイトル: $ISSUE_TITLE / 要望詳細: $ISSUE_BODY" --yes --no-auto-commits
+          # Aiderにはファイル経由で指示を出すことで、シェルの構文エラーを100%回避
+          aider --message-file issue_prompt.txt --yes --no-auto-commits
 
           # 認証URLの設定
           git remote set-url origin "https://x-access-token:${{ secrets.AI_PAT }}@github.com/${{ github.repository }}.git"
