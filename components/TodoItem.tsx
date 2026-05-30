@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { Todo } from "@/types/todo";
 import styles from "@/styles/TodoItem.module.css";
 
@@ -7,13 +8,23 @@ type TodoItemProps = {
   onToggle: (id: string) => void;
   /** 削除する */
   onDelete: (id: string) => void;
+  /** 編集を保存する */
+  onEdit: (id: string, newText: string) => void;
 };
 
 /**
  * 1件の TODO を表示し、完了・削除操作を提供するコンポーネント。
  * 親（pages/index.tsx）から状態とハンドラを受け取る presentational 構成。
  */
-export default function TodoItem({ todo, onToggle, onDelete }: TodoItemProps) {
+export default function TodoItem({ todo, onToggle, onDelete, onEdit }: TodoItemProps) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [editText, setEditText] = useState(todo.text);
+
+  const handleEditSave = () => {
+    onEdit(todo.id, editText);
+    setIsEditing(false);
+  };
+
   return (
     <li className={`${styles.item} ${todo.completed ? styles.completed : ""}`}>
       <label className={styles.label}>
@@ -23,8 +34,36 @@ export default function TodoItem({ todo, onToggle, onDelete }: TodoItemProps) {
           onChange={() => onToggle(todo.id)}
           className={styles.checkbox}
         />
-        <span className={styles.text}>{todo.text}</span>
+        {isEditing ? (
+          <input
+            type="text"
+            value={editText}
+            onChange={(e) => setEditText(e.target.value)}
+            className={styles.editInput}
+          />
+        ) : (
+          <span className={styles.text}>{todo.text}</span>
+        )}
       </label>
+      {isEditing ? (
+        <button
+          type="button"
+          onClick={handleEditSave}
+          className={styles.saveButton}
+          aria-label={`「${todo.text}」を保存`}
+        >
+          保存
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setIsEditing(true)}
+          className={styles.editButton}
+          aria-label={`「${todo.text}」を編集`}
+        >
+          編集
+        </button>
+      )}
       <button
         type="button"
         onClick={() => onDelete(todo.id)}
