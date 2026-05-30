@@ -3,74 +3,83 @@
   display: flex;
   justify-content: center;
   padding: 2rem 1rem;
-  background: #f5f7fa;
-  font-family: system-ui, -apple-system, sans-serif;
+  background: #f0f4f8;
+  font-family: 'Roboto', sans-serif;
 }
 
 .container {
   width: 100%;
-  max-width: 520px;
+  max-width: 600px;
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  padding: 2rem;
 }
 
 .title {
-  margin: 0 0 0.25rem;
-  font-size: 1.75rem;
-  color: #1a1a2e;
+  margin: 0 0 0.5rem;
+  font-size: 2rem;
+  color: #333;
+  text-align: center;
 }
 
 .subtitle {
-  margin: 0 0 1.5rem;
-  font-size: 0.875rem;
-  color: #6b7280;
+  margin: 0 0 2rem;
+  font-size: 1rem;
+  color: #555;
+  text-align: center;
 }
 
 .form {
   display: flex;
   gap: 0.5rem;
-  margin-bottom: 1rem;
+  margin-bottom: 1.5rem;
 }
 
 .input {
   flex: 1;
-  padding: 0.625rem 0.75rem;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
+  padding: 0.75rem 1rem;
+  border: 1px solid #ccc;
+  border-radius: 8px;
   font-size: 1rem;
+  transition: border-color 0.3s ease;
 }
 
 .input:focus {
   outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+  border-color: #0070f3;
+  box-shadow: 0 0 0 3px rgba(0, 112, 243, 0.2);
 }
 
 .addButton {
-  padding: 0.625rem 1rem;
-  background: green;
+  padding: 0.75rem 1.25rem;
+  background: #0070f3;
   color: #fff;
   border: none;
-  border-radius: 6px;
-  font-size: 0.9375rem;
+  border-radius: 8px;
+  font-size: 1rem;
   cursor: pointer;
+  transition: background 0.3s ease;
 }
 
 .addButton:hover {
-  background: darkgreen;
+  background: #005bb5;
 }
 
 .summary {
-  margin: 0 0 0.75rem;
-  font-size: 0.875rem;
-  color: #4b5563;
+  margin: 0 0 1rem;
+  font-size: 1rem;
+  color: #666;
+  text-align: center;
 }
 
 .empty {
-  padding: 1.5rem;
+  padding: 2rem;
   text-align: center;
-  color: #9ca3af;
-  background: #fff;
-  border-radius: 8px;
-  border: 1px dashed #d1d5db;
+  color: #888;
+  background: #f9fafb;
+  border-radius: 12px;
+  border: 1px dashed #ccc;
 }
 
 .list {
@@ -79,5 +88,5 @@
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 1rem;
 }
