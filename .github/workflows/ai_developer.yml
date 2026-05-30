@@ -24,13 +24,11 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11" # 正しくは python-version です！
+          python-version: "3.11"
 
-      # 自律型AIエンジニア「Aider」のインストール
       - name: Install Aider
         run: pip install aider-chat
 
-      # OpenAIキーを使って自動解決・自動コミットを実行
       - name: Run AI Coder (Aider)
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_KEY }}
@@ -42,13 +40,19 @@ jobs:
           BRANCH_NAME="ai-feature/issue-${{ github.event.issue.number }}"
           git checkout -b $BRANCH_NAME
 
+          # --auto-commit を付与し、プロンプトで「確認せずに即座にファイルを作成しろ」と命令します
           aider --message "
-          以下のGitHub Issueを解決するために、必要なコードを新規作成または修正してください。
+          You are in a non-interactive CI environment. Do not ask for confirmation.
+          Immediately create or modify the necessary files to solve this issue.
 
           【Issueタイトル】: ${{ github.event.issue.title }}
           【Issue内容】:
           ${{ github.event.issue.body }}
-          " --yes
+          " --yes --auto-commit
+
+          # 万が一Aiderがコミットし忘れたときのために、安全策としてgit add/commitを挟む
+          git add .
+          git commit -m "feat: auto-implemented by AI for Issue #${{ github.event.issue.number }}" || true
 
           git push origin $BRANCH_NAME
           gh pr create --title "[AI] ${{ github.event.issue.title }}" --body "Closes #${{ github.event.issue.number }}\n\nAIによって自動生成されたプルリクエストです。" --base main --head $BRANCH_NAME
