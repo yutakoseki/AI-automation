@@ -40,23 +40,12 @@ jobs:
           BRANCH_NAME="ai-feature/issue-${{ github.event.issue.number }}"
           git checkout -b $BRANCH_NAME
 
-          aider --message "
-          [SYSTEM INSTRUCTION: AUTONOMOUS MODE]
-          - あなたはプロのエンジニアエージェントです。
-          - もし必要なディレクトリやファイル、雛形コードが存在しない場合は、ゼロからすべて新規作成してください。
-          - 人間への確認（確認入力の要求）は一切行わないでください。
-          - Issueで要求されている技術（Next.js等）のベストプラクティスに従ってコードを書いてください。
+          # Issueのタイトルと本文を一度環境変数に安全に退避させ、Aiderの引数誤認バグを防ぎます
+          export ISSUE_TITLE="${{ github.event.issue.title }}"
+          export ISSUE_BODY="${{ github.event.issue.body }}"
 
-          [TASK]
-          Issueタイトル: ${{ github.event.issue.title }}
-          Issue本文:
-          ${{ github.event.issue.body }}
-
-          [OUTPUT REQUIREMENTS]
-          - 新しいファイルが必要な場合は、迷わず即座に作成してください。
-          - 作成・修正するコードは、手抜きせず、完全に動作する状態に仕上げてください。
-          - 最後に必ず実装した内容の要約（Summary）を英語または日本語で出力してください。
-          " --yes --no-auto-commits
+          # 【修正箇所】--message の中身を極力シンプルにし、環境変数経由でタスクを安全に注入
+          aider --message "修正タスクを開始してください。Issueタイトル: $ISSUE_TITLE / 要望詳細: $ISSUE_BODY" --yes --no-auto-commits
 
           # 認証URLの設定
           git remote set-url origin "https://x-access-token:${{ secrets.AI_PAT }}@github.com/${{ github.repository }}.git"
@@ -64,19 +53,15 @@ jobs:
           # 未コミットの変更があればすべてステージング
           git add .
 
-          # 【修正ポイント】AIが勝手にコミットしていても大丈夫なように、
-          # 「まだコミットされていない差分」または「mainブランチとのコードの差分」があるかを両方チェックします
+          # mainブランチとの間にコードの差分があるかをチェック
           if [ -n "$(git status --porcelain)" ] || [ -n "$(git diff origin/main HEAD)" ]; then
             
-            # まだコミットされていない変更がある場合だけコミットを実行
             if [ -n "$(git status --porcelain)" ]; then
               git commit -m "feat: implemented by AI for Issue #${{ github.event.issue.number }}"
             fi
             
-            # ブランチを強制プッシュ
             git push -f origin $BRANCH_NAME
             
-            # サマリーの抽出（直近のコミットログ、またはAiderのログ）
             AI_SUMMARY=$(git log -1 --pretty=%B)
             
             # プルリクエストを作成
