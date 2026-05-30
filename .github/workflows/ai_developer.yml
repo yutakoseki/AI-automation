@@ -38,7 +38,7 @@ jobs:
       - name: Run AI Coder (Aider)
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_KEY }} # 登録済みのOpenAIのAPIキー
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # GitHubが自動発行する安全なトークン
+          GITHUB_TOKEN: ${{ secrets.AI_PAT }} # GitHub Fine-grained personal access tokens
         run: |
           # Gitのコミットログに記録されるユーザー名とメールアドレスを設定（GitHub公式のボットアカウントを指定）
           git config --global user.name "github-actions[bot]"
