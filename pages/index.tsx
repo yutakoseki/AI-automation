@@ -36,7 +36,14 @@ export default function Home() {
     );
   };
 
-  /** 指定 ID の TODO を削除 */
+  /** 指定 ID の TODO を編集 */
+  const handleEdit = (id: string, newText: string) => {
+    setTodos((prev) =>
+      prev.map((todo) =>
+        todo.id === id ? { ...todo, text: newText } : todo
+      )
+    );
+  };
   const handleDelete = (id: string) => {
     setTodos((prev) => prev.filter((todo) => todo.id !== id));
   };
@@ -86,6 +93,7 @@ export default function Home() {
                   todo={todo}
                   onToggle={handleToggle}
                   onDelete={handleDelete}
+                  onEdit={handleEdit}
                 />
               ))}
             </ul>
