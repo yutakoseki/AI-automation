@@ -1,60 +1,51 @@
 name: AI Issue Worker
 
 on:
-  # 人間がIssueに何かしらの「ラベル」をペタッと貼った瞬間にActionsを起動
   issues:
     types: [labeled]
 
 permissions:
-  contents: write # AIがソースコードを変更したり、新しいブランチを作ったりする権限
-  pull-requests: write # AIが自動でプルリクエスト（PR）を作成して人間に届ける権限
-  issues: write # 必要に応じてIssueにコメントを書き込む権限
+  contents: write
+  pull-requests: write
+  issues: write
 
 jobs:
   implement:
-    # 貼られたラベルの名前が「ai-ready」である時だけ、この先のAI処理を実行する
     if: github.event.label.name == 'ai-ready'
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
     steps:
-      # 1. サーバー環境にリポジトリの全ソースコードをチェックアウト
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      # 2. AIツール「Aider」を動かすためのPython環境をセットアップ
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      # 3. 世界最高峰の自律型コーディングAIエージェント「Aider」をインストール
       - name: Install Aider
         run: pip install aider-chat
 
-      # 4. OpenAIのAPIキーを使って、AIにIssueを丸投げし自動開発を実行
       - name: Run AI Coder (Aider)
         env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_KEY }} # 登録済みのOpenAIのAPIキー
-          GITHUB_TOKEN: ${{ secrets.AI_PAT }} # あなたが作った個人アクセストークン（PAT）
+          OPENAI_API_KEY: ${{ secrets.OPENAI_KEY }}
+          GITHUB_TOKEN: ${{ secrets.AI_PAT }}
         run: |
-          # Gitのコミットログに記録されるユーザー名とメールアドレスを設定
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
-          # 今回のIssue番号を組み込んだ、AI専用の開発用ブランチを作成して切り替え
           BRANCH_NAME="ai-feature/issue-${{ github.event.issue.number }}"
           git checkout -b $BRANCH_NAME
 
-          # 【自動実装コマンド】
           aider --message "
           [SYSTEM INSTRUCTION: AUTONOMOUS MODE]
           - あなたはプロのエンジニアエージェントです。
           - もし必要なディレクトリやファイル、雛形コードが存在しない場合は、ゼロからすべて新規作成してください。
           - 人間への確認（確認入力の要求）は一切行わないでください。
-          - Issueで要求されている技術（Next.js等）のベストプラティクスに従ってコードを書いてください。
+          - Issueで要求されている技術（Next.js等）のベストプラクティスに従ってコードを書いてください。
 
           [TASK]
           Issueタイトル: ${{ github.event.issue.title }}
@@ -67,23 +58,28 @@ jobs:
           - 最後に必ず実装した内容の要約（Summary）を英語または日本語で出力してください。
           " --yes --no-auto-commits
 
-          # 【★認証エラー対策★】Gitの通信URLに、設定してもらったAI_PATを安全に直接注入します
+          # 認証URLの設定
           git remote set-url origin "https://x-access-token:${{ secrets.AI_PAT }}@github.com/${{ github.repository }}.git"
 
-          # AIの作業終了直後、まず問答無用で全ファイルをステージング（git add）
+          # 未コミットの変更があればすべてステージング
           git add .
 
-          # 現在の作業ディレクトリに変更（未コミットの差分）があるかチェック
-          if [ -n "$(git status --porcelain)" ]; then
-            # 変更があった場合：コミットしてプッシュ
-            git commit -m "feat: implemented by AI for Issue #${{ github.event.issue.number }}"
+          # 【修正ポイント】AIが勝手にコミットしていても大丈夫なように、
+          # 「まだコミットされていない差分」または「mainブランチとのコードの差分」があるかを両方チェックします
+          if [ -n "$(git status --porcelain)" ] || [ -n "$(git diff origin/main HEAD)" ]; then
+            
+            # まだコミットされていない変更がある場合だけコミットを実行
+            if [ -n "$(git status --porcelain)" ]; then
+              git commit -m "feat: implemented by AI for Issue #${{ github.event.issue.number }}"
+            fi
+            
+            # ブランチを強制プッシュ
             git push -f origin $BRANCH_NAME
             
-            # AI（Aider）が最後に出力した詳細ログからサマリーを自動抽出
+            # サマリーの抽出（直近のコミットログ、またはAiderのログ）
             AI_SUMMARY=$(git log -1 --pretty=%B)
             
-            # GitHub CLI（ghコマンド）を使ってプルリクエストを作成
-            # トークンを環境変数として明示的にghコマンドに渡します
+            # プルリクエストを作成
             export GH_TOKEN="${{ secrets.AI_PAT }}"
             gh pr create --title "[AI] ${{ github.event.issue.title }}" --body "
             ## 🎯 課題の概要
@@ -95,9 +91,8 @@ jobs:
             
             ## ⚠️ レビュアー（人間）への注意点・確認方法
             - AIが自動生成したコードです。意図通りのロジックやデザインになっているか、画面上の「Files changed」タブで最終確認をお願いします。
-            - 不要な設定ファイルの書き換えや、パッケージの依存関係に変更が入っていないか念のためご確認ください。
             " --base main --head $BRANCH_NAME || echo "PR is already created or updated."
           else
-            echo "既にリポジトリ内のコードは最新です。追加の変更は不要なため、処理を正常終了します。"
+            echo "リポジトリ内に差分が全く検出されなかったため、PR作成をスキップします。"
             exit 0
           fi
