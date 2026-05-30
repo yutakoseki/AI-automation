@@ -1,0 +1,110 @@
+name: AI PR Reviewer
+
+on:
+  # AI（または人間）によってプルリクエストが「作成」されるか、コードが「追加プッシュ」されたら自動起動
+  pull_request:
+    types: [opened, synchronize]
+
+permissions:
+  contents: read
+  pull-requests: write # レビューコメントをPRに書き込む権限
+
+jobs:
+  review:
+    # 独自のループ防止：AI自身（github-actions[bot]）が作ったPRであっても、その中身を厳しくチェックする
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      # 1. 変更されたコードの差分（Diff）を取得するためにリポジトリをチェックアウト
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # 2. Python環境のセットアップ
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # 3. コードの差分（Diff）を綺麗に解析・整形してAIに渡すための準備
+      - name: Get PR Diff
+        id: diff
+        run: |
+          # mainブランチと現在のPRブランチの差分を取得し、一時ファイルに出力
+          git diff origin/${{ github.base_ref }}...HEAD > pr_diff.txt
+          # 差分が空（ファイル変更なし）ならレビューをスキップ
+          if [ ! -s pr_diff.txt ]; then
+            echo "has_diff=false" >> $GITHUB_OUTPUT
+          else
+            echo "has_diff=true" >> $GITHUB_OUTPUT
+          fi
+
+      # 4. OpenAIの頭脳を使い、人間が「3秒でマージ可否を判断できる」レポートを生成
+      - name: Generate AI Review
+        if: steps.diff.outputs.has_diff == 'true'
+        id: openai
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_KEY }}
+        python: |
+          import os
+          import json
+          import urllib.request
+
+          # 保存したコードの差分を読み込み
+          with open("pr_diff.txt", "r") as f:
+              diff_text = f.read()
+
+          # 人間の判断量を最小化するための超厳格なプロンプト（命令）
+          prompt = f"""
+          You are an elite Senior Code Reviewer. Analyze the following Git Diff of a Pull Request.
+          Your goal is to minimize the human reviewer's cognitive load. 
+          Provide your review in Japanese.
+
+          [RULES]
+          1. Start with a "Final Verdict Card" using one of these statuses:
+             - 🟢 [READY TO MERGE]: No critical issues, high quality. Humans can just click merge.
+             - 🟡 [NEED ATTENTION]: Minor improvements or styling issues found. Mergeable, but better to fix.
+             - 🔴 [REQUEST CHANGES]: Critical bugs, security risks, syntax errors, or incomplete logic. DO NOT MERGE.
+          2. Keep it concise. Focus on IMPACT, not minor text styling unless it breaks the app.
+          3. Format with clean Markdown checkboxes.
+
+          [PR Diff data]
+          {diff_text}
+          """
+
+          # OpenAI APIへのリクエストデータ構築
+          url = "https://api.openai.com/v1/chat/completions"
+          headers = {
+              "Authorization": f"Bearer {os.environ['OPENAI_API_KEY']}",
+              "Content-Type": "application/json"
+          }
+          data = {
+              "model": "gpt-4o-mini", # コストパフォーマンスと速度を重視
+              "messages": [{"role": "user", "content": prompt}],
+              "temperature": 0.2
+          }
+
+          req = urllib.request.Request(url, data=json.dumps(data).encode(), headers=headers)
+          try:
+              with urllib.request.urlopen(req) as res:
+                  response = json.loads(res.read().decode())
+                  review_comment = response['choices'][0]['message']['content']
+                  
+                  # レビュー結果を一時ファイルに退避
+                  with open("review_result.md", "w") as rf:
+                      rf.write(review_comment)
+          except Exception as e:
+              print(f"Error calling OpenAI: {e}")
+              exit(1)
+
+      # 5. AIのレビュー結果を、プルリクエストのタイムラインにコメントとして自動投稿
+      - name: Post Review Comment
+        if: steps.diff.outputs.has_diff == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # 特殊文字のエスケープ処理を行い、GitHub CLIでPRにコメント
+          REVIEW_BODY=$(cat review_result.md)
+          gh pr comment ${{ github.event.pull_request.number }} --body "$REVIEW_BODY"
