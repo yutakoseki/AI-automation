@@ -16,9 +16,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 自律型AIエンジニアをバックグラウンドで起動
-      - name: Run AI coder
-        uses: stwise/mentat-action@main
+      # 2026年現在、最も安定してIssueからPRを作れる自律型AIアクション
+      - name: Run AI Coder
+        uses: gpt-engineer-org/gpt-engineer-action@main
         env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_KEY }} # あなたが登録したキー
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # GitHubが自動で出すのでRepository secretsへの登録不要！
+          OPENAI_API_KEY: ${{ secrets.OPENAI_KEY }} # 登録済みのキー
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
