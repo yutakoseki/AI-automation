@@ -8,6 +8,53 @@
   border: 1px solid #ddd;
   border-radius: 10px;
   transition: box-shadow 0.3s ease;
+.editInput {
+  flex: 1;
+  padding: 0.5rem;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  font-size: 1rem;
+  margin-right: 0.5rem;
+}
+
+.editTextarea {
+  flex: 1;
+  padding: 0.5rem;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  font-size: 1rem;
+  margin-right: 0.5rem;
+}
+
+.saveButton {
+  padding: 0.5rem 0.75rem;
+  background: #0070f3;
+  color: #fff;
+}
+  border: none;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: background 0.3s ease;
+}
+
+.saveButton:hover {
+  background: #005bb5;
+}
+
+.editButton {
+  padding: 0.5rem 0.75rem;
+  background: #ffc107;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: background 0.3s ease;
+}
+
+.editButton:hover {
+  background: #e0a800;
 }
 
 .item:hover {
