@@ -15,16 +15,25 @@ function createId(): string {
  */
 export default function Home() {
   const [todos, setTodos] = useState<Todo[]>([]);
-  const [input, setInput] = useState("");
+  const [title, setTitle] = useState("");
+  const [details, setDetails] = useState("");
+  const [deadline, setDeadline] = useState("");
 
   /** 新規 TODO を追加 */
   const handleAdd = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const text = input.trim();
-    if (!text) return;
+    const trimmedTitle = title.trim();
+    const trimmedDetails = details.trim();
+    const trimmedDeadline = deadline.trim();
+    if (!trimmedTitle || !trimmedDetails || !trimmedDeadline) return;
 
-    setTodos((prev) => [...prev, { id: createId(), text, completed: false }]);
-    setInput("");
+    setTodos((prev) => [
+      ...prev,
+      { id: createId(), title: trimmedTitle, details: trimmedDetails, deadline: trimmedDeadline, completed: false },
+    ]);
+    setTitle("");
+    setDetails("");
+    setDeadline("");
   };
 
   /** 完了状態をトグル */
@@ -66,11 +75,25 @@ export default function Home() {
           <form onSubmit={handleAdd} className={styles.form}>
             <input
               type="text"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder="やることを入力..."
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="タイトルを入力..."
               className={styles.input}
-              aria-label="新しい TODO"
+              aria-label="新しい TODO タイトル"
+            />
+            <textarea
+              value={details}
+              onChange={(e) => setDetails(e.target.value)}
+              placeholder="詳細内容を入力..."
+              className={styles.textarea}
+              aria-label="新しい TODO 詳細"
+            />
+            <input
+              type="date"
+              value={deadline}
+              onChange={(e) => setDeadline(e.target.value)}
+              className={styles.input}
+              aria-label="新しい TODO 期日"
             />
             <button type="submit" className={styles.addButton}>
               追加
