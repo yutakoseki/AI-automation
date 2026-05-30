@@ -1,4 +1,4 @@
-import { FormEvent, useState } from "react";
+import { FormEvent, useState, useEffect } from "react";
 import Head from "next/head";
 import TodoItem from "@/components/TodoItem";
 import type { Todo } from "@/types/todo";
@@ -18,6 +18,15 @@ export default function Home() {
   const [title, setTitle] = useState("");
   const [details, setDetails] = useState("");
   const [deadline, setDeadline] = useState("");
+  const [currentDateTime, setCurrentDateTime] = useState(new Date().toLocaleString());
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentDateTime(new Date().toLocaleString());
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, []);
 
   /** すべての TODO を完了にする */
   const handleMarkAllComplete = () => {
@@ -51,10 +60,22 @@ export default function Home() {
   };
 
   /** 指定 ID の TODO を編集 */
-  const handleEdit = (id: string, newText: string) => {
+  const handleEdit = (
+    id: string,
+    newTitle: string,
+    newDetails: string,
+    newDeadline: string
+  ) => {
     setTodos((prev) =>
       prev.map((todo) =>
-        todo.id === id ? { ...todo, text: newText } : todo
+        todo.id === id
+          ? {
+              ...todo,
+              title: newTitle,
+              details: newDetails,
+              deadline: newDeadline,
+            }
+          : todo
       )
     );
   };
@@ -73,6 +94,9 @@ export default function Home() {
 
       <main className={styles.main}>
         <div className={styles.container}>
+          <div className={styles.dateTime}>
+            {currentDateTime}
+          </div>
           <h1 className={styles.title}>TODO App</h1>
           <p className={styles.subtitle}>テスト・実験用の最小構成サンプル</p>
 

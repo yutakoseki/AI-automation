@@ -16,6 +16,13 @@
   padding: 2rem;
 }
 
+.dateTime {
+  margin: 0 0 1rem;
+  font-size: 0.875rem;
+  color: #6b7280;
+  text-align: center;
+}
+
 .title {
   margin: 0 0 0.5rem;
   font-size: 2rem;

@@ -9,7 +9,7 @@ type TodoItemProps = {
   /** 削除する */
   onDelete: (id: string) => void;
   /** 編集を保存する */
-  onEdit: (id: string, newText: string) => void;
+  onEdit: (id: string, title: string, details: string, deadline: string) => void;
 };
 
 /**
@@ -40,35 +40,35 @@ export default function TodoItem({ todo, onToggle, onDelete, onEdit }: TodoItemP
         <p>{todo.details}</p>
         <small>Deadline: {todo.deadline}</small>
         {isEditing ? (
-          <input
-            type="text"
-            value={editTitle}
-            onChange={(e) => setEditTitle(e.target.value)}
-            className={styles.editInput}
-            placeholder="タイトルを編集..."
-          />
-          <textarea
-            value={editDetails}
-            onChange={(e) => setEditDetails(e.target.value)}
-            className={styles.editTextarea}
-            placeholder="詳細を編集..."
-          />
-          <input
-            type="date"
-            value={editDeadline}
-            onChange={(e) => setEditDeadline(e.target.value)}
-            className={styles.editInput}
-          />
-        ) : (
-          <span className={styles.text}>{todo.text}</span>
-        )}
+          <>
+            <input
+              type="text"
+              value={editTitle}
+              onChange={(e) => setEditTitle(e.target.value)}
+              className={styles.editInput}
+              placeholder="タイトルを編集..."
+            />
+            <textarea
+              value={editDetails}
+              onChange={(e) => setEditDetails(e.target.value)}
+              className={styles.editTextarea}
+              placeholder="詳細を編集..."
+            />
+            <input
+              type="date"
+              value={editDeadline}
+              onChange={(e) => setEditDeadline(e.target.value)}
+              className={styles.editInput}
+            />
+          </>
+        ) : null}
       </label>
       {isEditing ? (
         <button
           type="button"
           onClick={handleEditSave}
           className={styles.saveButton}
-          aria-label={`「${todo.text}」を保存`}
+          aria-label={`「${todo.title}」を保存`}
         >
           保存
         </button>
@@ -77,7 +77,7 @@ export default function TodoItem({ todo, onToggle, onDelete, onEdit }: TodoItemP
           type="button"
           onClick={() => setIsEditing(true)}
           className={styles.editButton}
-          aria-label={`「${todo.text}」を編集`}
+          aria-label={`「${todo.title}」を編集`}
         >
           編集
         </button>
@@ -86,7 +86,7 @@ export default function TodoItem({ todo, onToggle, onDelete, onEdit }: TodoItemP
         type="button"
         onClick={() => onDelete(todo.id)}
         className={styles.deleteButton}
-        aria-label={`「${todo.text}」を削除`}
+        aria-label={`「${todo.title}」を削除`}
       >
         削除
       </button>
