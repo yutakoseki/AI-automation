@@ -1,38 +1,44 @@
 name: AI Issue Worker
 
 on:
+  # 人間がIssueに何かしらの「ラベル」をペタッと貼った瞬間にActionsを起動
   issues:
     types: [labeled]
 
 permissions:
-  contents: write
-  pull-requests: write
-  issues: write
+  contents: write # AIがソースコードを変更したり、新しいブランチを作ったりする権限
+  pull-requests: write # AIが自動でプルリクエスト（PR）を作成して人間に届ける権限
+  issues: write # 必要に応じてIssueにコメントを書き込む権限
 
 jobs:
   implement:
+    # 貼られたラベルの名前が「ai-ready」である時だけ、この先のAI処理を実行する（それ以外は即座にスキップ）
     if: github.event.label.name == 'ai-ready'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 20 # 念のためのAI暴走・コスト爆発防止（20分で強制終了）
 
     steps:
+      # 1. サーバー環境にリポジトリの全ソースコードをチェックアウト（ダウンロード）
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
+      # 2. AIツール「Aider」を動かすためのPython環境（3.11）をセットアップ
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
+      # 3. 世界最高峰の自律型コーディングAIエージェント「Aider」をインストール
       - name: Install Aider
         run: pip install aider-chat
 
+      # 4. OpenAIのAPIキーを使って、AIにIssueを丸投げし自動開発を実行
       - name: Run AI Coder (Aider)
         env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_KEY }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_KEY }} # 登録済みのOpenAIのAPIキー
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # GitHubが自動発行する安全なトークン
         run: |
           # Gitのコミットログに記録されるユーザー名とメールアドレスを設定（GitHub公式のボットアカウントを指定）
           git config --global user.name "github-actions[bot]"
@@ -68,10 +74,12 @@ jobs:
             git add .
             # 変更内容をコミット（メッセージにIssue番号を自動埋め込み）
             git commit -m "feat: implemented by AI for Issue #${{ github.event.issue.number }}"
-            # 作成したAIブランチをGitHub（リモートリポジトリ）にプッシュ
-            git push origin $BRANCH_NAME
-            # GitHub CLI（ghコマンド）を使って、自動でプルリクエスト（PR）を作成して人間へ届ける
-            gh pr create --title "[AI] ${{ github.event.issue.title }}" --body "Closes #${{ github.event.issue.number }}\n\nAIによる自動実装・新規ファイル作成が完了しました。" --base main --head $BRANCH_NAME
+            
+            # 【Git競合対策】過去の古い同名ブランチが残っていても、上書きで強制プッシュ（-f）する
+            git push -f origin $BRANCH_NAME
+            
+            # GitHub CLI（ghコマンド）を使って自動でプルリクエストを作成（既にPRがある場合は上書きまたはスキップ）
+            gh pr create --title "[AI] ${{ github.event.issue.title }}" --body "Closes #${{ github.event.issue.number }}\n\nAIによる自動実装・新規ファイル作成が完了しました。" --base main --head $BRANCH_NAME || echo "PR is already created or updated."
           else
             # 変更が一切なかった場合：AIが何もファイルを作れずに失敗したとみなし、エラーログを出してActionsを異常終了させる
             echo "No changes detected. AI might have failed to implement."
