@@ -3,7 +3,7 @@ import { format } from "date-fns";
 import Head from "next/head";
 import TodoItem from "@/components/TodoItem";
 import type { Todo } from "@/types/todo";
-import styles from "@/styles/Home.module.css";
+import AddTodoModal from "@/components/AddTodoModal";
 
 /** 簡易 ID 生成（テスト用。本番では uuid 等を推奨） */
 function createId(): string {
@@ -16,9 +16,7 @@ function createId(): string {
  */
 export default function Home() {
   const [todos, setTodos] = useState<Todo[]>([]);
-  const [title, setTitle] = useState("");
-  const [details, setDetails] = useState("");
-  const [deadline, setDeadline] = useState("");
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentDateTime, setCurrentDateTime] = useState(format(new Date(), "yyyy/MM/dd HH:mm:ss"));
 
   useEffect(() => {
@@ -35,20 +33,11 @@ export default function Home() {
       prev.map((todo) => ({ ...todo, completed: true }))
     );
   };
-  const handleAdd = (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const trimmedTitle = title.trim();
-    const trimmedDetails = details.trim();
-    const trimmedDeadline = deadline.trim();
-    if (!trimmedTitle || !trimmedDetails || !trimmedDeadline) return;
-
+  const handleAdd = (title: string, details: string, deadline: string) => {
     setTodos((prev) => [
       ...prev,
-      { id: createId(), title: trimmedTitle, details: trimmedDetails, deadline: trimmedDeadline, completed: false },
+      { id: createId(), title, details, deadline, completed: false },
     ]);
-    setTitle("");
-    setDetails("");
-    setDeadline("");
   };
 
   /** 完了状態をトグル */
@@ -101,34 +90,17 @@ export default function Home() {
           <h1 className={styles.title}>TODO App</h1>
           <p className={styles.subtitle}>テスト・実験用の最小構成サンプル</p>
 
-          {/* 追加フォーム */}
-          <form onSubmit={handleAdd} className={styles.form}>
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="タイトルを入力..."
-              className={styles.input}
-              aria-label="新しい TODO タイトル"
+          {/* 追加ボタン */}
+          <button onClick={() => setIsModalOpen(true)} className={styles.addButton}>
+            追加
+          </button>
+
+          {isModalOpen && (
+            <AddTodoModal
+              onAdd={handleAdd}
+              onClose={() => setIsModalOpen(false)}
             />
-            <textarea
-              value={details}
-              onChange={(e) => setDetails(e.target.value)}
-              placeholder="詳細内容を入力..."
-              className={styles.textarea}
-              aria-label="新しい TODO 詳細"
-            />
-            <input
-              type="date"
-              value={deadline}
-              onChange={(e) => setDeadline(e.target.value)}
-              className={styles.input}
-              aria-label="新しい TODO 期日"
-            />
-            <button type="submit" className={styles.addButton}>
-              追加
-            </button>
-          </form>
+          )}
 
           {/* 一括完了ボタン */}
           <button onClick={handleMarkAllComplete} className={styles.completeAllButton}>

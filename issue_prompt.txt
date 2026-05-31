@@ -1,23 +1,23 @@
-Issueタイトル: Next.js: サーバーとクライアントで日付表示が一致せず hydration error が発生する
-Issue本文:
-Next.js アプリケーションで、サーバーでレンダリングされたHTMLとクライアントでレンダリングされたテキスト内容が一致しない "hydration error" が発生しています。
+Issueタイトル: TODO追加ボタンでタイトル・詳細・期限入力モーダル表示し、Top画面をスッキリさせる
+Issue詳細:
+## 概要
+TODO追加ボタンを押した際、タイトル・詳細・期限を入力できるモーダルを表示し、トップ（一覧）画面をスッキリさせてください。
 
-エラー内容:
-```
-Unhandled Runtime Error
-Error: Text content does not match server-rendered HTML.
-See more info here: https://nextjs.org/docs/messages/react-hydration-error
+## 詳細要件
+- 「追加」ボタン押下時に、
+    - タイトル
+    - 詳細
+    - 期限（日付型）
+  を入力できるモーダルを表示
+- モーダル経由で新規TODOを追加する形式に変更
+- Top画面には入力欄を表示せず、追加ボタンのみ残す
+- UIはシンプル・分かりやすく整える
+- 既存のUIからの変更点: 追加用入力欄・テキストを除外し、「追加」ボタンのみ表示
 
-Text content did not match. Server: "5/31/2026, 7:16:39 AM" Client: "2026/5/31 7:16:38"
+## 参考
+- 下図の現UIから、入力欄部分をモーダル化してください
 
-<Home>
-  <main>
-    <div>
-      <div>
-        "5/31/2026, 7:16:39 AM"
-        "2026/5/31 7:16:38"
-Call Stack
-React
-```
+<img alt="TODO追加UIイメージ" width="991" src="https://github.com/user-attachments/assets/5e11578e-18dd-46f0-8259-429a189c8849" />
 
-サーバーとクライアントの日時表示フォーマットやタイムゾーンが原因となる場合があります。日時表示の処理、または useEffect の利用有無、ローカライズ設定などを見直してください。
+---
+実装時は、使いやすさやデザインも配慮してください。
