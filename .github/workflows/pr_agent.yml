@@ -153,3 +153,60 @@ jobs:
         run: |
           set -euo pipefail
           gh pr comment "${{ steps.pr.outputs.number }}" --body-file .ai/review.md
+
+      - name: Notify Slack
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+          PR_TITLE: ${{ steps.pr.outputs.title }}
+          PR_URL: https://github.com/${{ github.repository }}/pull/${{ steps.pr.outputs.number }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "$SLACK_WEBHOOK_URL" ]; then
+            echo "SLACK_WEBHOOK_URL is not configured; skipping Slack notification."
+            exit 0
+          fi
+
+          VERDICT="$(awk '/^## Verdict/{getline; while ($0 == "") getline; print; exit}' .ai/review.md)"
+          RISK="$(awk '/^## Merge Risk/{getline; while ($0 == "") getline; print; exit}' .ai/review.md)"
+          FOCUS="$(awk '/^## Human Review Focus/{flag=1; next} /^## /{flag=0} flag {print}' .ai/review.md | sed '/^[[:space:]]*$/d' | head -n 6)"
+
+          jq -n \
+            --arg title "AI Reviewer finished for PR #${PR_NUMBER}" \
+            --arg pr_title "$PR_TITLE" \
+            --arg pr_url "$PR_URL" \
+            --arg verdict "${VERDICT:-Unknown}" \
+            --arg risk "${RISK:-Unknown}" \
+            --arg focus "${FOCUS:-No focus items captured.}" \
+            '{
+              text: $title,
+              blocks: [
+                {
+                  type: "section",
+                  text: {
+                    type: "mrkdwn",
+                    text: ("*AI Reviewer finished*\\n<" + $pr_url + "|PR #" + env.PR_NUMBER + ": " + $pr_title + ">")
+                  }
+                },
+                {
+                  type: "section",
+                  fields: [
+                    { type: "mrkdwn", text: ("*Verdict*\\n" + $verdict) },
+                    { type: "mrkdwn", text: ("*Merge Risk*\\n" + $risk) }
+                  ]
+                },
+                {
+                  type: "section",
+                  text: {
+                    type: "mrkdwn",
+                    text: ("*Human Review Focus*\\n" + $focus)
+                  }
+                }
+              ]
+            }' > .ai/slack-payload.json
+
+          curl -sS -X POST \
+            -H 'Content-Type: application/json' \
+            --data @.ai/slack-payload.json \
+            "$SLACK_WEBHOOK_URL"
