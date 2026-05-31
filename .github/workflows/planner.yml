@@ -3,6 +3,8 @@ name: AI Planner
 on:
   issues:
     types: [labeled]
+  issue_comment:
+    types: [created]
 
 permissions:
   contents: read
@@ -11,7 +13,9 @@ permissions:
 
 jobs:
   plan:
-    if: github.event.label.name == 'ai-ready'
+    if: |
+      (github.event_name == 'issues' && github.event.label.name == 'ai-ready') ||
+      (github.event_name == 'issue_comment' && github.event.issue.pull_request == null && contains(github.event.issue.labels.*.name, 'ai-needs-info') && contains(github.event.comment.body, 'AI Planner needs clarification before it can safely create an implementation plan.') == false)
     runs-on: ubuntu-latest
 
     steps:
@@ -32,6 +36,17 @@ jobs:
             - Identify the files that most likely need changes.
             - Produce an implementation plan for a separate coding agent.
 
+            Planning style:
+            - Do not over-analyze. You have a hard limit of 10 turns.
+            - You must create the required .ai files within the turn limit.
+            - Do not wait for human clarification. This pipeline must proceed autonomously.
+            - If the issue is broad or ambiguous, choose the smallest safe implementation slice that can produce a useful pull request.
+            - If full completion is risky, put the remaining work in out_of_scope and plan only the first concrete step.
+            - Prefer conservative, reversible changes over large rewrites.
+            - Do not browse the web. Focus only on the local repository.
+            - If you are unsure about specific files, list the best likely files and explain the risk.
+            - Ask for clarification only when implementation would be dangerous or impossible without it.
+
             Important restrictions:
             - Do not modify application source code.
             - Do not fix the issue.
@@ -49,6 +64,26 @@ jobs:
 
             3. .ai/target-files.txt
             One file path per line.
+
+            If and only if the issue cannot be implemented safely without clarification, do not create plan files.
+            Instead, create:
+
+            .ai/needs-info.json
+
+            needs-info.json schema:
+
+            {
+              "issue_number": number,
+              "status": "needs_info",
+              "question": "string",
+              "reason": "string",
+              "suggested_replies": [
+                "string"
+              ]
+            }
+
+            The question must be specific and answerable in one issue comment.
+            suggested_replies must contain 2 to 4 concrete options whenever possible.
 
             plan.json schema:
 
@@ -84,24 +119,44 @@ jobs:
             }
 
             Rules:
-            - target_files must not be empty unless the issue is impossible to analyze.
+            - target_files must not be empty unless there is no plausible repository file to change.
             - If confidence is low, still provide the best candidate files.
             - Prefer concrete file paths over general advice.
             - Do not say "no changes needed" unless you can prove it from the repository.
+            - Do not ask questions or require user confirmation for ordinary ambiguity.
+            - If clarification is truly required, create only .ai/needs-info.json.
+            - open_questions is only for documenting uncertainty; it must not block autonomous implementation.
             - Do not include Markdown fences in plan.json.
-            - plan.json must be valid JSON.
+            - plan.json and needs-info.json must be valid JSON.
 
             GitHub Issue:
             Title: ${{ github.event.issue.title }}
 
             Body:
             ${{ github.event.issue.body }}
+
+            Latest clarification comment, if this run was triggered by an issue comment:
+            ${{ github.event.comment.body }}
           claude_args: |
             --max-turns 10
 
       - name: Validate planner output
+        id: validate
         run: |
           set -euo pipefail
+
+          if [ -f .ai/needs-info.json ] && [ ! -f .ai/plan.json ]; then
+            jq empty .ai/needs-info.json
+            test "$(jq -r '.status' .ai/needs-info.json)" = "needs_info"
+            test -n "$(jq -r '.question' .ai/needs-info.json)"
+            echo "mode=needs_info" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ -f .ai/needs-info.json ] && [ -f .ai/plan.json ]; then
+            echo "Planner produced both plan.json and needs-info.json"
+            exit 1
+          fi
 
           test -f .ai/plan.md
           test -f .ai/plan.json
@@ -122,7 +177,47 @@ jobs:
             fi
           done < .ai/target-files.txt
 
+          echo "mode=plan" >> "$GITHUB_OUTPUT"
+
+      - name: Comment clarification request on issue
+        if: steps.validate.outputs.mode == 'needs_info'
+        env:
+          GH_TOKEN: ${{ secrets.AI_PAT }}
+        run: |
+          set -euo pipefail
+
+          ISSUE_NUMBER="${{ github.event.issue.number }}"
+          QUESTION="$(jq -r '.question' .ai/needs-info.json)"
+          REASON="$(jq -r '.reason' .ai/needs-info.json)"
+          OPTIONS="$(jq -r '.suggested_replies[]? | "- " + .' .ai/needs-info.json)"
+
+          gh label create ai-needs-info \
+            --color F9D0C4 \
+            --description "AI planner is waiting for clarification" || true
+
+          gh issue edit "$ISSUE_NUMBER" --add-label ai-needs-info
+
+          gh issue comment "$ISSUE_NUMBER" --body "AI Planner needs clarification before it can safely create an implementation plan.
+
+          Question:
+          ${QUESTION}
+
+          Reason:
+          ${REASON}
+
+          Suggested replies:
+          ${OPTIONS}
+
+          Reply to this issue with the needed clarification. The planner will run again automatically."
+
+      - name: Stop until clarification is received
+        if: steps.validate.outputs.mode == 'needs_info'
+        run: |
+          echo "Planner needs clarification. Generator will not run until a new issue comment retriggers planning."
+          exit 1
+
       - name: Upload planner output
+        if: steps.validate.outputs.mode == 'plan'
         uses: actions/upload-artifact@v4
         with:
           name: ai-plan
@@ -130,8 +225,11 @@ jobs:
           if-no-files-found: error
 
       - name: Comment plan on issue
+        if: steps.validate.outputs.mode == 'plan'
         env:
           GH_TOKEN: ${{ secrets.AI_PAT }}
         run: |
-          gh issue comment "${{ github.event.issue.number }}" \
+          ISSUE_NUMBER="${{ github.event.issue.number }}"
+          gh issue edit "$ISSUE_NUMBER" --remove-label ai-needs-info || true
+          gh issue comment "$ISSUE_NUMBER" \
             --body-file .ai/plan.md

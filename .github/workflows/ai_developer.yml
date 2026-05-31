@@ -74,6 +74,16 @@ jobs:
           git checkout -b "$BRANCH_NAME"
 
           # Plannerが特定した対象ファイルと実装計画をAiderに渡す
+          cat << 'EOF' >> .ai/plan.md
+
+          ## Generator constraints
+          - Implement the plan autonomously without asking for human clarification.
+          - If the plan is broad or uncertain, implement the smallest safe slice described by the plan.
+          - Do not perform unrelated refactors or large rewrites.
+          - Prefer a useful, reviewable pull request over attempting to solve every out-of-scope item.
+          - If a requested file is missing, create it only when the plan explicitly requires a new file; otherwise choose the closest existing file from the target list.
+          EOF
+
           mapfile -t TARGET_FILES < <(sed '/^[[:space:]]*$/d' .ai/target-files.txt)
           aider "${TARGET_FILES[@]}" --message-file .ai/plan.md --yes --no-auto-commits
 
