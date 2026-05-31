@@ -1,11 +1,12 @@
 {
   "approved": true,
-  "reason": "Implementation produced a diff and npm run build passed.",
+  "reason": "Generator produced buildable code and evaluator checks passed.",
   "metrics": {
-    "changed_file_count": 2,
-    "target_match_count": 2,
+    "changed_file_count": 1,
+    "target_match_count": 1,
     "unplanned_file_count": 0,
-    "repair_attempts": 0
+    "repair_attempts": 3,
+    "evaluator_fix_attempts": 0
   },
   "checks": {
     "generated_diff": true,
@@ -13,12 +14,10 @@
     "build_passed": true
   },
   "changed_files": [
-    "components/AddTodoModal.tsx",
-    "components/EditTodoModal.tsx"
+    "components/AddTodoModal.tsx"
   ],
   "matched_target_files": [
-    "components/AddTodoModal.tsx",
-    "components/EditTodoModal.tsx"
+    "components/AddTodoModal.tsx"
   ],
   "unplanned_files": [],
   "blocking_issues": []

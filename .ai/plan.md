@@ -1,70 +1,62 @@
-# 実装計画: タスク追加・編集モーダルのダーク化＆デザイン統一
+# 実装計画: TODO追加時のフィールド別バリデーションメッセージ表示
 
 ## Issue 概要
-タスク追加 (`components/AddTodoModal.tsx`) と編集 (`components/EditTodoModal.tsx`) のモーダルが、ハードコードされた白背景 (`bg-white`) と固定のグレー系テキストで描画されており、アプリ全体で適用されているダークモード (`pages/index.tsx`, `components/TodoItem.tsx`, `styles/globals.css` の `dark:` 系クラス) と統一されていない。両モーダルを既存のダーク配色 (`dark:bg-gray-900`, `dark:bg-gray-800`, `dark:text-gray-100` 等) と整合させ、フォーム・ボタンのトーン、レスポンシブ、アクセシビリティも軽く整える。
+`components/AddTodoModal.tsx` の「追加」ボタン押下時、現状の `handleAdd` は未入力があると無言で `return` するだけで、ユーザーには何故追加されないか分からない。
+Issueでは「タイトル」「詳細」「期限」のいずれかが未入力の場合に、項目ごとの日本語メッセージ（例: 「タイトルを入力してください」）を画面上に表示し、リトライ可能とすることが求められている。アクセシビリティと日本語表記への配慮も明記されている。
 
 ## 最小の安全なスライス
-両モーダルコンポーネントの className のみを更新する。Props・state・コールバック・ロジックには触れない。新規ファイル追加や共通化リファクタは行わない。`tailwind.config.js`・`postcss.config.js`・`styles/globals.css` も変更しない (現状の `media` ベースのダーク戦略を維持)。
+変更対象は `components/AddTodoModal.tsx` のみ。同等課題のある `EditTodoModal.tsx` は別Issueで対応すべく out_of_scope に置く。Props・コールバック・呼び出し元 (`pages/index.tsx`) には触れない。新規ファイル追加や共通化リファクタは行わない。
 
 ## 対象ファイル
 - `components/AddTodoModal.tsx`
-- `components/EditTodoModal.tsx`
 
 ## 必要な変更
-両ファイルに同じパターンを適用する (見出し id とラベルだけ別)。
-
-1. **オーバーレイ** `<div className="fixed inset-0 ...">`
-   - 既存: `bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full`
-   - 追加: `dark:bg-black dark:bg-opacity-60`
-   - アクセシビリティ属性を追加: `role="dialog"`, `aria-modal="true"`, `aria-labelledby="add-todo-modal-title"` (Add 側) / `aria-labelledby="edit-todo-modal-title"` (Edit 側)。
-
-2. **パネル** `<div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">`
-   - 置換: `border` → `border border-gray-200 dark:border-gray-700`
-   - 置換: `bg-white` → `bg-white dark:bg-gray-900` (index.tsx のメインカードと揃える)
-   - 置換: `w-96` → `w-11/12 max-w-md` (狭幅でのはみ出し回避)
-
-3. **見出し** `<h2 ...>`
-   - 置換: `text-gray-900` → `text-gray-900 dark:text-gray-100`
-   - 追加: `id="add-todo-modal-title"` / `id="edit-todo-modal-title"`
-
-4. **フォーム入力** (title input / details textarea / date input すべて)
-   - 置換: `border` → `border border-gray-300 dark:border-gray-600`
-   - 追加: `bg-white dark:bg-gray-800`
-   - 置換: `text-gray-900 placeholder-gray-500` → `text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400`
-   - 追加: `focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400`
-
-5. **ボタン**
-   - プライマリ (`追加` / `保存`): 既存 `bg-blue-500 hover:bg-blue-700` は維持し、`focus:outline-none focus:ring-2 focus:ring-blue-400` を追加。
-   - セカンダリ (`キャンセル`): `bg-gray-500 hover:bg-gray-700` を `bg-gray-500 hover:bg-gray-600 dark:bg-gray-700 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-400` に変更。
+1. **エラー状態の追加**
+   - `useState<{ title?: string; details?: string; deadline?: string }>({})` で項目別エラーを保持する。
+2. **`handleAdd` のバリデーション化**
+   - `trimmedTitle` 空 → `errors.title = "タイトルを入力してください"`
+   - `trimmedDetails` 空 → `errors.details = "詳細を入力してください"`
+   - `trimmedDeadline` 空 → `errors.deadline = "期限を入力してください"`
+   - エラーが1件でもあれば `setErrors(errors)` して `return`（`onAdd` を呼ばない＝リトライ可能）。
+   - 成功時は `setErrors({})` してから既存のフローを実行。
+3. **エラー表示UI**
+   - 各 `<input>` / `<textarea>` の直下に、エラーがある場合のみ `<p id="<field>-error" className="text-red-600 dark:text-red-400 text-sm mb-2">{message}</p>` を描画する。
+4. **アクセシビリティ属性**
+   - 各フォーム要素に `id` を付与（例: `id="todo-title"`）。
+   - エラー時のみ `aria-invalid="true"` と `aria-describedby="<field>-error"` を付ける。
+   - 各フォーム要素に対応する `<label htmlFor="…" className="sr-only">タイトル</label>` 等を追加し、スクリーンリーダーで項目名が伝わるようにする（既存 placeholder は英語のため）。
+5. **エラーの自動クリア**
+   - 各 `onChange` ハンドラで該当フィールドのエラーを削除する（`setErrors(prev => ({ ...prev, title: undefined }))` 等）。
 
 ## 受け入れ条件
-- ダークモードで両モーダルのパネル背景・テキスト・入力・ボタンが暗系トーンになり、`pages/index.tsx` 内のカード (`dark:bg-gray-900`) と視覚的に同系統になる。
-- ライトモードでも違和感がない (既存の白系トーンを保つ)。
-- 幅 360px のビューポートでも水平スクロールが発生しない。
-- フォーム入力とボタンがフォーカス時に視認可能なリングを表示する。
-- `<div role="dialog" aria-modal="true" aria-labelledby="…">` が両モーダルに付与され、見出しに対応する `id` が存在する。
-- Props・state・ハンドラのシグネチャに変更はない。
+- 全項目未入力で「追加」を押下したとき、3つすべてのエラーメッセージが対応フィールド直下に表示され、TODOは追加されない。
+- 1〜2項目だけ未入力の場合、その項目だけのメッセージが表示される。
+- 全項目入力後の「追加」では、エラーは消え、TODOが追加されモーダルが閉じる。
+- 入力欄を変更するとそのフィールドのエラーが消える。
+- メッセージは日本語、`aria-invalid` と `aria-describedby` がエラー時に正しく設定される。
+- `onAdd` / `onClose` のシグネチャ、呼び出し元 (`pages/index.tsx`) は変更しない。
 - `npm run build` が成功する。
 
 ## 実行コマンド
+- `npm install`
 - `npm run build`
 
-## リスク
-- `tailwind.config.js` を読まずに進めているが、本リポジトリは Tailwind v3 で既に `dark:` 系を多用しており、戦略は既定の `media`。後で `class` 戦略へ切り替えても同じ `dark:` クラスは動く。
-- `bg-opacity-*` は Tailwind v4 で廃止予定だが、v3 をピン留めしているので問題なし。
-- `<input type="date">` のカレンダーポップアップはブラウザ依存で完全には暗色化できない。フィールド本体のみテーマ適用される。
+## スコープ外（後続）
+- `components/EditTodoModal.tsx` の編集フォームへの同等バリデーション（別Issue推奨）。
+- 過去日チェック・文字数上限など空欄以外のバリデーション。
+- `onBlur` 等によるリアルタイムバリデーション。
+- バリデーションスキーマライブラリ (zod / yup 等) の導入。
 
-## スコープ外 (後続)
-- `AddTodoModal` と `EditTodoModal` を共通 `<Modal>` コンポーネントへリファクタ。
-- ESC キーで閉じる / 背景クリックで閉じる / フォーカストラップ。
-- 明示的なダーク/ライト切替トグル UI の追加。
-- 日付ピッカーの完全な暗色化。
+## リスク
+- リポジトリにテストが無く、回帰は手動確認に依存する。
+- `<label>` を視覚表示するとレイアウトが変わるため、`sr-only` で視覚的影響を避ける必要がある。
+- placeholderの英語表記は本Issueの範囲外だが、`<label>` 日本語化との二重表現になる可能性あり（コーディングエージェントは placeholder を変更せず label 追加に留めること）。
 
 ## Generator constraints
 - 自律的に実装し、人間の確認を待たない。
-- 計画が広い場合は本ドキュメントの最小スライスのみを実装する。
+- 計画外のファイル (`pages/`, `types/`, `tailwind.config.js`, `styles/globals.css`, `components/EditTodoModal.tsx`, `components/TodoItem.tsx` 等) は変更しない。
 - 関係ない箇所のリファクタや大規模書き換えは行わない。
-- 計画外のファイル (`tailwind.config.js`, `styles/globals.css`, `pages/`, `types/` 等) は変更しない。
+- バリデーションの仕様は本計画の3つのメッセージに限定する（空欄チェックのみ）。
 
 ## Generator constraints
 - Implement the plan autonomously without asking for human clarification.

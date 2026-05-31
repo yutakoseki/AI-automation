@@ -1,54 +1,44 @@
 {
-  "issue_number": 29,
-  "summary": "AddTodoModal と EditTodoModal の className を既存のダークモード配色 (dark:bg-gray-900 / dark:bg-gray-800 / dark:text-gray-100 など) に揃え、レスポンシブ幅 (w-11/12 max-w-md)、フォーカスリング、role/aria-modal/aria-labelledby を追加する。ロジック・props・state は変更しない。",
+  "issue_number": 32,
+  "summary": "AddTodoModalの『追加』押下時、未入力があると現状は無言でreturnしている。項目別エラー状態をuseStateで持ち、handleAddで空欄を検証して日本語メッセージ(『タイトルを入力してください』『詳細を入力してください』『期限を入力してください』)を各フィールド直下に表示する。aria-invalid/aria-describedbyとsr-onlyラベルでアクセシビリティに配慮し、入力変更で該当エラーを自動クリアしてリトライ可能にする。",
   "confidence": "high",
   "target_files": [
-    "components/AddTodoModal.tsx",
-    "components/EditTodoModal.tsx"
+    "components/AddTodoModal.tsx"
   ],
   "required_changes": [
     {
       "file": "components/AddTodoModal.tsx",
-      "change": "オーバーレイに dark:bg-black dark:bg-opacity-60 と role=\"dialog\" / aria-modal=\"true\" / aria-labelledby=\"add-todo-modal-title\" を追加。パネルの border を border border-gray-200 dark:border-gray-700 に、bg-white を bg-white dark:bg-gray-900 に、w-96 を w-11/12 max-w-md に変更。<h2> に id=\"add-todo-modal-title\" と dark:text-gray-100 を追加。全フォーム入力 (text input, textarea, date input) に bg-white dark:bg-gray-800、border border-gray-300 dark:border-gray-600、dark:text-gray-100、dark:placeholder-gray-400、focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 を追加。プライマリボタンに focus:outline-none focus:ring-2 focus:ring-blue-400 を追加。キャンセルボタンを bg-gray-500 hover:bg-gray-600 dark:bg-gray-700 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-400 に変更。props / state / handler は変更しない。",
-      "reason": "現状 bg-white と固定グレー系テキストでハードコードされており、pages/index.tsx などで適用されているダーク配色と視覚的に乖離しているため。",
+      "change": "useState<{title?:string;details?:string;deadline?:string}>({})で項目別エラーを保持する。handleAddでtrim後に空のフィールドそれぞれにエラーメッセージ(タイトル→『タイトルを入力してください』、詳細→『詳細を入力してください』、期限→『期限を入力してください』)を設定し、1件でもあれば setErrors してonAddを呼ばずにreturnする。成功時はsetErrors({})する。各input/textareaにid(例:todo-title/todo-details/todo-deadline)とsr-onlyの<label>を付与し、エラー時のみaria-invalid='true'とaria-describedby='<field>-error'を設定。フィールド直下にエラーがある場合のみ<p id='<field>-error' className='text-red-600 dark:text-red-400 text-sm mb-2'>{message}</p>を描画する。各onChange内で該当フィールドのエラーをundefinedにクリアする。Props/onAdd/onCloseのシグネチャ、呼び出し元(pages/index.tsx)は変更しない。placeholderテキストも変更しない。",
+      "reason": "現状のhandleAddは空欄時にreturnのみでユーザーに理由が伝わらない。Issueはフィールド別の日本語メッセージとアクセシビリティ配慮を要求している。最小変更で実現するにはAddTodoModal内のローカル状態として持つのが安全。",
       "acceptance_criteria": [
-        "ダークモードでパネル背景が dark:bg-gray-900、テキストが dark:text-gray-100、入力背景が dark:bg-gray-800 になっている",
-        "ライトモード時の見た目に重大な後退がない",
-        "オーバーレイ要素に role=\"dialog\" と aria-modal=\"true\"、aria-labelledby=\"add-todo-modal-title\" が付与されている",
-        "<h2> に id=\"add-todo-modal-title\" が付与されている",
-        "パネル幅が w-11/12 max-w-md となり、360px 幅でも水平スクロールが発生しない",
-        "入力とボタンにフォーカス時の ring が表示される",
-        "onAdd / onClose のシグネチャと呼び出し順は変更されていない"
-      ]
-    },
-    {
-      "file": "components/EditTodoModal.tsx",
-      "change": "AddTodoModal と同一のダークモード・レスポンシブ・アクセシビリティ更新を適用する。aria-labelledby と <h2> の id は \"edit-todo-modal-title\" を使用。見出し文言 (『TODO を編集』) とボタン文言 (『保存』『キャンセル』) は維持。props / state / handler は変更しない。",
-      "reason": "AddTodoModal と構造がほぼ同一で同じ問題を抱えており、両モーダルを視覚的に統一する必要があるため。",
-      "acceptance_criteria": [
-        "AddTodoModal と同一のダーク配色クラスが適用されている",
-        "aria-labelledby=\"edit-todo-modal-title\" と <h2 id=\"edit-todo-modal-title\"> が設定されている",
-        "編集保存フロー (onSave(title, details, deadline) → onClose()) が変更されていない",
-        "todo の初期値読み込みロジックが変更されていない"
+        "全項目未入力で追加押下時、3つのエラーメッセージが各フィールド直下に表示されTODOは追加されない",
+        "一部のみ未入力時、その項目のメッセージだけ表示される",
+        "全項目入力後の追加では正常に追加されモーダルが閉じる",
+        "エラー状態のフィールドはaria-invalid='true'とaria-describedby='<field>-error'を持つ",
+        "ユーザーが入力欄を更新するとそのフィールドのエラーが消える",
+        "各input/textareaにsr-onlyの<label>と一致するidが付与されている",
+        "onAdd/onCloseのシグネチャと呼び出し元pages/index.tsxは変更されていない",
+        "npm run buildが成功する"
       ]
     }
   ],
   "commands_to_run": [
+    "npm install",
     "npm run build"
   ],
   "out_of_scope": [
-    "AddTodoModal と EditTodoModal を共通 <Modal> コンポーネントへ抽出するリファクタ",
-    "ESC キー / 背景クリックでのモーダル閉鎖、フォーカストラップ",
-    "明示的なダーク/ライト切替トグル UI の追加",
-    "<input type=\"date\"> のカレンダーポップアップ自体の暗色化",
-    "tailwind.config.js / styles/globals.css / pages/index.tsx など対象外ファイルへの変更"
+    "components/EditTodoModal.tsx への同等バリデーション追加",
+    "期限の過去日チェックや文字数制限など空欄以外のバリデーション",
+    "onBlur や入力中のリアルタイムバリデーション",
+    "zod/yup 等バリデーションライブラリの導入",
+    "placeholderテキストの日本語化"
   ],
   "risks": [
-    "tailwind.config.js を未確認だが、リポジトリ内で既に dark: クラスが広く使われており既定の media 戦略で動作している前提。class 戦略へ切り替えても同 dark: クラスは有効。",
-    "bg-opacity-* は Tailwind v4 で廃止予定だが、本プロジェクトは v3 をピン留めしているため安全。",
-    "<input type=\"date\"> のカレンダー UI はブラウザ実装に依存し完全な暗色化はできない。"
+    "テストが存在しないため回帰検出は手動確認に依存する",
+    "sr-only以外でラベルを表示するとモーダルのレイアウトが変わるため、視覚的にはsr-onlyに留める必要がある",
+    "placeholderが英語のままsr-onlyラベルが日本語になるが、本Issueはバリデーションが主題のため許容"
   ],
   "open_questions": [
-    "将来的に共通 Modal コンポーネントへ抽出する是非 — 本 PR ではスコープ外として保留。"
+    "EditTodoModalへの同等対応は別Issueで扱う想定"
   ]
 }
