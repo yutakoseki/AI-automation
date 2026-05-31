@@ -1,5 +1,6 @@
 import { useState } from "react";
-import type { Todo } from "@/types/todo";
+import EditTodoModal from "@/components/EditTodoModal";
+import { Todo } from "@/types/todo";
 
 type TodoItemProps = {
   todo: Todo;
@@ -17,14 +18,7 @@ type TodoItemProps = {
  */
 export default function TodoItem({ todo, onToggle, onDelete, onEdit }: TodoItemProps) {
   const [isEditing, setIsEditing] = useState(false);
-  const [editTitle, setEditTitle] = useState(todo.title);
-  const [editDetails, setEditDetails] = useState(todo.details);
-  const [editDeadline, setEditDeadline] = useState(todo.deadline);
-
-  const handleEditSave = () => {
-    onEdit(todo.id, editTitle, editDetails, editDeadline);
-    setIsEditing(false);
-  };
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   return (
     <li className={`flex items-center justify-between p-4 bg-white dark:bg-gray-800 rounded-lg shadow ${todo.completed ? 'opacity-50' : ''}`}>
@@ -41,49 +35,25 @@ export default function TodoItem({ todo, onToggle, onDelete, onEdit }: TodoItemP
           <small className="text-xs text-gray-500 dark:text-gray-400">Deadline: {todo.deadline}</small>
         </div>
       </label>
-      {isEditing ? (
-        <div className="flex space-x-2">
-          <input
-            type="text"
-            value={editTitle}
-            onChange={(e) => setEditTitle(e.target.value)}
-            className="form-input mt-1 block w-full rounded-md border-gray-300 shadow-sm"
-            placeholder="タイトルを編集..."
-          />
-          <textarea
-            value={editDetails}
-            onChange={(e) => setEditDetails(e.target.value)}
-            className="form-textarea mt-1 block w-full rounded-md border-gray-300 shadow-sm"
-            placeholder="詳細を編集..."
-          />
-          <input
-            type="date"
-            value={editDeadline}
-            onChange={(e) => setEditDeadline(e.target.value)}
-            className="form-input mt-1 block w-full rounded-md border-gray-300 shadow-sm"
-          />
-        </div>
-      ) : null}
+      {isModalOpen && (
+        <EditTodoModal
+          todo={todo}
+          onSave={(title, details, deadline) => {
+            onEdit(todo.id, title, details, deadline);
+            setIsModalOpen(false);
+          }}
+          onClose={() => setIsModalOpen(false)}
+        />
+      )}
       <div className="flex space-x-2">
-        {isEditing ? (
-          <button
-            type="button"
-            onClick={handleEditSave}
-            className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-1 px-2 rounded"
-            aria-label={`「${todo.title}」を保存`}
-          >
-            保存
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={() => setIsEditing(true)}
-            className="bg-yellow-500 hover:bg-yellow-700 text-white font-bold py-1 px-2 rounded"
-            aria-label={`「${todo.title}」を編集`}
-          >
-            編集
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={() => setIsModalOpen(true)}
+          className="bg-yellow-500 hover:bg-yellow-700 text-white font-bold py-1 px-2 rounded"
+          aria-label={`「${todo.title}」を編集`}
+        >
+          編集
+        </button>
         <button
           type="button"
           onClick={() => onDelete(todo.id)}

@@ -1,0 +1,26 @@
+
+> ai-automation-todo@0.1.0 build
+> next build
+
+  ▲ Next.js 14.2.35
+
+   Linting and checking validity of types ...
+   Creating an optimized production build ...
+ ✓ Compiled successfully
+   Collecting page data ...
+   Generating static pages (0/3) ...
+ ✓ Generating static pages (3/3)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (pages)                             Size     First Load JS
+┌ ○ /                                     7.95 kB        87.9 kB
+├   /_app                                 0 B            79.9 kB
+└ ○ /404                                  180 B          80.1 kB
++ First Load JS shared by all             82.5 kB
+  ├ chunks/framework-64ad27b21261a9ce.js  44.8 kB
+  ├ chunks/main-4b423ec82b590a3f.js       34 kB
+  └ other shared chunks (total)           3.63 kB
+
+○  (Static)  prerendered as static content
+
