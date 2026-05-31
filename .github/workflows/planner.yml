@@ -251,3 +251,46 @@ jobs:
           else
             echo "ai-needs-info label is not present; nothing to clear."
           fi
+
+      - name: Notify Slack on failure
+        if: failure()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          mkdir -p .ai
+
+          if [ -z "$SLACK_WEBHOOK_URL" ]; then
+            echo "SLACK_WEBHOOK_URL is not configured; skipping Slack notification."
+            exit 0
+          fi
+
+          STATUS="Planner失敗"
+          DETAIL="AI Planner が停止しました。Actionsログを確認してください。"
+          if [ -f .ai/needs-info.json ]; then
+            STATUS="Planner停止 / 要確認"
+            DETAIL="$(jq -r '.question // "追加確認が必要です。"' .ai/needs-info.json)"
+          fi
+
+          jq -n \
+            --arg title "AI Planner failed for Issue #${ISSUE_NUMBER}" \
+            --arg status "$STATUS" \
+            --arg issue "#${ISSUE_NUMBER}: ${ISSUE_TITLE}" \
+            --arg detail "$DETAIL" \
+            --arg run_url "$RUN_URL" \
+            '{
+              text: $title,
+              blocks: [
+                { type: "section", text: { type: "mrkdwn", text: ("*AIパイプライン停止*\\n*フェーズ:* Planner\\n*状態:* " + $status) } },
+                { type: "section", text: { type: "mrkdwn", text: ("*Issue:* " + $issue + "\\n*理由:* " + $detail) } },
+                { type: "section", text: { type: "mrkdwn", text: ("<" + $run_url + "|Actionsログを開く>") } }
+              ]
+            }' > .ai/slack-failure-payload.json
+
+          curl -sS -X POST \
+            -H 'Content-Type: application/json' \
+            --data @.ai/slack-failure-payload.json \
+            "$SLACK_WEBHOOK_URL"

@@ -182,6 +182,7 @@ jobs:
           PR_URL: https://github.com/${{ github.repository }}/pull/${{ steps.pr.outputs.number }}
         run: |
           set -euo pipefail
+          mkdir -p .ai
 
           if [ -z "$SLACK_WEBHOOK_URL" ]; then
             echo "SLACK_WEBHOOK_URL is not configured; skipping Slack notification."
@@ -239,4 +240,39 @@ jobs:
           curl -sS -X POST \
             -H 'Content-Type: application/json' \
             --data @.ai/slack-payload.json \
+            "$SLACK_WEBHOOK_URL"
+
+      - name: Notify Slack on failure
+        if: failure()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+          PR_TITLE: ${{ steps.pr.outputs.title }}
+          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          mkdir -p .ai
+
+          if [ -z "$SLACK_WEBHOOK_URL" ]; then
+            echo "SLACK_WEBHOOK_URL is not configured; skipping Slack notification."
+            exit 0
+          fi
+
+          PR_LABEL="PR #${PR_NUMBER:-unknown}: ${PR_TITLE:-unknown}"
+          jq -n \
+            --arg title "AI Reviewer failed" \
+            --arg pr "$PR_LABEL" \
+            --arg run_url "$RUN_URL" \
+            '{
+              text: $title,
+              blocks: [
+                { type: "section", text: { type: "mrkdwn", text: "*AIパイプライン停止*\\n*フェーズ:* Reviewer\\n*状態:* 失敗" } },
+                { type: "section", text: { type: "mrkdwn", text: ("*対象:* " + $pr + "\\n*理由:* Reviewerの実行または通知に失敗しました。") } },
+                { type: "section", text: { type: "mrkdwn", text: ("<" + $run_url + "|Actionsログを開く>") } }
+              ]
+            }' > .ai/slack-failure-payload.json
+
+          curl -sS -X POST \
+            -H 'Content-Type: application/json' \
+            --data @.ai/slack-failure-payload.json \
             "$SLACK_WEBHOOK_URL"

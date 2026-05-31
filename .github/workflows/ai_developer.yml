@@ -178,106 +178,144 @@ jobs:
             exit 1
           fi
 
-          # Evaluator: no coding or repair here. It only judges the final generated diff.
-          EVALUATION_STATUS="approved"
-          EVALUATION_REASON="Generator produced buildable code and evaluator checks passed."
-          CHANGED_FILES="$(git diff --name-only -- ':!.ai' | sort)"
-          TARGET_FILES="$(sed '/^[[:space:]]*$/d' .ai/target-files.txt | sort)"
-          MATCHED_TARGET_FILES="$(comm -12 <(printf '%s\n' "$CHANGED_FILES") <(printf '%s\n' "$TARGET_FILES") || true)"
-          UNPLANNED_FILES="$(comm -23 <(printf '%s\n' "$CHANGED_FILES") <(printf '%s\n' "$TARGET_FILES") || true)"
-          TARGET_MATCH_COUNT="$(printf '%s\n' "$MATCHED_TARGET_FILES" | sed '/^$/d' | wc -l | tr -d ' ')"
-          CHANGED_FILE_COUNT="$(printf '%s\n' "$CHANGED_FILES" | sed '/^$/d' | wc -l | tr -d ' ')"
-          UNPLANNED_FILE_COUNT="$(printf '%s\n' "$UNPLANNED_FILES" | sed '/^$/d' | wc -l | tr -d ' ')"
+          evaluate_current_diff() {
+            EVALUATION_STATUS="approved"
+            EVALUATION_REASON="Generator produced buildable code and evaluator checks passed."
+            CHANGED_FILES="$(git diff --name-only -- ':!.ai' | sort)"
+            TARGET_FILES="$(sed '/^[[:space:]]*$/d' .ai/target-files.txt | sort)"
+            MATCHED_TARGET_FILES="$(comm -12 <(printf '%s\n' "$CHANGED_FILES") <(printf '%s\n' "$TARGET_FILES") || true)"
+            UNPLANNED_FILES="$(comm -23 <(printf '%s\n' "$CHANGED_FILES") <(printf '%s\n' "$TARGET_FILES") || true)"
+            TARGET_MATCH_COUNT="$(printf '%s\n' "$MATCHED_TARGET_FILES" | sed '/^$/d' | wc -l | tr -d ' ')"
+            CHANGED_FILE_COUNT="$(printf '%s\n' "$CHANGED_FILES" | sed '/^$/d' | wc -l | tr -d ' ')"
+            UNPLANNED_FILE_COUNT="$(printf '%s\n' "$UNPLANNED_FILES" | sed '/^$/d' | wc -l | tr -d ' ')"
 
-          {
-            echo "# AI Evaluation"
-            echo
-            echo "## Verdict Inputs"
-            echo "- Plan summary: $(jq -r '.summary // "N/A"' .ai/plan.json)"
-            echo "- Planner confidence: $(jq -r '.confidence // "unknown"' .ai/plan.json)"
-            echo "- Final changed files: ${CHANGED_FILE_COUNT}"
-            echo "- Final changed target files: ${TARGET_MATCH_COUNT}"
-            echo "- Final unplanned changed files: ${UNPLANNED_FILE_COUNT}"
-            echo "- Generator automatic repair attempts: ${REPAIR_ATTEMPTS}"
-            echo
-            echo "## Changed Files"
-            if [ -n "$CHANGED_FILES" ]; then
-              printf '%s\n' "$CHANGED_FILES" | sed 's/^/- /'
+            {
+              echo "# AI Evaluation"
+              echo
+              echo "## Verdict Inputs"
+              echo "- Evaluation round: ${EVALUATION_ROUND}"
+              echo "- Plan summary: $(jq -r '.summary // "N/A"' .ai/plan.json)"
+              echo "- Planner confidence: $(jq -r '.confidence // "unknown"' .ai/plan.json)"
+              echo "- Final changed files: ${CHANGED_FILE_COUNT}"
+              echo "- Final changed target files: ${TARGET_MATCH_COUNT}"
+              echo "- Final unplanned changed files: ${UNPLANNED_FILE_COUNT}"
+              echo "- Generator automatic repair attempts: ${REPAIR_ATTEMPTS}"
+              echo "- Evaluator requested fixes: ${EVALUATOR_FIX_ATTEMPTS}"
+              echo
+              echo "## Changed Files"
+              if [ -n "$CHANGED_FILES" ]; then
+                printf '%s\n' "$CHANGED_FILES" | sed 's/^/- /'
+              else
+                echo "- none"
+              fi
+              echo
+              echo "## Unplanned Changed Files"
+              if [ -n "$UNPLANNED_FILES" ]; then
+                printf '%s\n' "$UNPLANNED_FILES" | sed 's/^/- /'
+              else
+                echo "- none"
+              fi
+              echo
+              echo "## Checks"
+              echo "- Generated diff exists: passed"
+              echo "- Generator self-check build: passed"
+            } > .ai/evaluation.md
+
+            if [ "$TARGET_MATCH_COUNT" -eq 0 ]; then
+              EVALUATION_STATUS="rejected"
+              EVALUATION_REASON="Generated diff did not modify any planner target files."
+              echo "- Target file coverage: failed" >> .ai/evaluation.md
             else
-              echo "- none"
+              echo "- Target file coverage: passed" >> .ai/evaluation.md
             fi
-            echo
-            echo "## Unplanned Changed Files"
-            if [ -n "$UNPLANNED_FILES" ]; then
-              printf '%s\n' "$UNPLANNED_FILES" | sed 's/^/- /'
+
+            if printf '%s\n' "$UNPLANNED_FILES" | grep -Ev '^(package-lock\.json|\.ai/.*)?$' | grep -q .; then
+              echo "- Unplanned file changes: review required but non-blocking" >> .ai/evaluation.md
             else
-              echo "- none"
+              echo "- Unplanned file changes: passed" >> .ai/evaluation.md
             fi
-            echo
-            echo "## Checks"
-            echo "- Generated diff exists: passed"
-            echo "- Generator self-check build: passed"
-          } > .ai/evaluation.md
 
-          if [ "$TARGET_MATCH_COUNT" -eq 0 ]; then
-            EVALUATION_STATUS="rejected"
-            EVALUATION_REASON="Generated diff did not modify any planner target files."
-            echo "- Target file coverage: failed" >> .ai/evaluation.md
-          else
-            echo "- Target file coverage: passed" >> .ai/evaluation.md
-          fi
+            if printf '%s\n' "$CHANGED_FILES" | grep -qx 'package.json' && ! printf '%s\n' "$CHANGED_FILES" | grep -qx 'package-lock.json'; then
+              EVALUATION_STATUS="rejected"
+              EVALUATION_REASON="package.json changed without package-lock.json."
+              echo "- Dependency lockfile consistency: failed" >> .ai/evaluation.md
+            else
+              echo "- Dependency lockfile consistency: passed" >> .ai/evaluation.md
+            fi
 
-          if printf '%s\n' "$UNPLANNED_FILES" | grep -Ev '^(package-lock\.json|\.ai/.*)?$' | grep -q .; then
-            echo "- Unplanned file changes: review required but non-blocking" >> .ai/evaluation.md
-          else
-            echo "- Unplanned file changes: passed" >> .ai/evaluation.md
-          fi
+            if npm run build > .ai/build.log 2>&1; then
+              echo "- Evaluator final build: passed" >> .ai/evaluation.md
+            else
+              EVALUATION_STATUS="rejected"
+              EVALUATION_REASON="Evaluator final build failed."
+              echo "- Evaluator final build: failed" >> .ai/evaluation.md
+            fi
 
-          if printf '%s\n' "$CHANGED_FILES" | grep -qx 'package.json' && ! printf '%s\n' "$CHANGED_FILES" | grep -qx 'package-lock.json'; then
-            EVALUATION_STATUS="rejected"
-            EVALUATION_REASON="package.json changed without package-lock.json."
-            echo "- Dependency lockfile consistency: failed" >> .ai/evaluation.md
-          else
-            echo "- Dependency lockfile consistency: passed" >> .ai/evaluation.md
-          fi
+            jq -n \
+              --argjson approved "$([ "$EVALUATION_STATUS" = "approved" ] && echo true || echo false)" \
+              --arg reason "$EVALUATION_REASON" \
+              --argjson changed_file_count "$CHANGED_FILE_COUNT" \
+              --argjson target_match_count "$TARGET_MATCH_COUNT" \
+              --argjson unplanned_file_count "$UNPLANNED_FILE_COUNT" \
+              --argjson repair_attempts "$REPAIR_ATTEMPTS" \
+              --argjson evaluator_fix_attempts "$EVALUATOR_FIX_ATTEMPTS" \
+              --arg changed_files "$(printf '%s\n' "$CHANGED_FILES" | tr '\n' ' ')" \
+              --arg matched_target_files "$(printf '%s\n' "$MATCHED_TARGET_FILES" | tr '\n' ' ')" \
+              --arg unplanned_files "$(printf '%s\n' "$UNPLANNED_FILES" | tr '\n' ' ')" \
+              '{
+                approved: $approved,
+                reason: $reason,
+                metrics: {
+                  changed_file_count: $changed_file_count,
+                  target_match_count: $target_match_count,
+                  unplanned_file_count: $unplanned_file_count,
+                  repair_attempts: $repair_attempts,
+                  evaluator_fix_attempts: $evaluator_fix_attempts
+                },
+                checks: {
+                  generated_diff: ($changed_file_count > 0),
+                  touched_planner_target: ($target_match_count > 0),
+                  build_passed: $approved
+                },
+                changed_files: ($changed_files | split(" ") | map(select(length > 0))),
+                matched_target_files: ($matched_target_files | split(" ") | map(select(length > 0))),
+                unplanned_files: ($unplanned_files | split(" ") | map(select(length > 0))),
+                blocking_issues: (if $approved then [] else [$reason] end)
+              }' > .ai/verdict.json
+          }
 
-          if npm run build > .ai/build.log 2>&1; then
-            echo "- Evaluator final build: passed" >> .ai/evaluation.md
-          else
-            EVALUATION_STATUS="rejected"
-            EVALUATION_REASON="Evaluator final build failed."
-            echo "- Evaluator final build: failed" >> .ai/evaluation.md
-          fi
+          EVALUATOR_FIX_ATTEMPTS=0
+          for EVALUATION_ROUND in 1 2; do
+            evaluate_current_diff
+            if [ "$EVALUATION_STATUS" = "approved" ]; then
+              break
+            fi
+            if [ "$EVALUATION_ROUND" -eq 2 ]; then
+              break
+            fi
 
-          jq -n \
-            --argjson approved "$([ "$EVALUATION_STATUS" = "approved" ] && echo true || echo false)" \
-            --arg reason "$EVALUATION_REASON" \
-            --argjson changed_file_count "$CHANGED_FILE_COUNT" \
-            --argjson target_match_count "$TARGET_MATCH_COUNT" \
-            --argjson unplanned_file_count "$UNPLANNED_FILE_COUNT" \
-            --argjson repair_attempts "$REPAIR_ATTEMPTS" \
-            --arg changed_files "$(printf '%s\n' "$CHANGED_FILES" | tr '\n' ' ')" \
-            --arg matched_target_files "$(printf '%s\n' "$MATCHED_TARGET_FILES" | tr '\n' ' ')" \
-            --arg unplanned_files "$(printf '%s\n' "$UNPLANNED_FILES" | tr '\n' ' ')" \
-            '{
-              approved: $approved,
-              reason: $reason,
-              metrics: {
-                changed_file_count: $changed_file_count,
-                target_match_count: $target_match_count,
-                unplanned_file_count: $unplanned_file_count,
-                repair_attempts: $repair_attempts
-              },
-              checks: {
-                generated_diff: ($changed_file_count > 0),
-                touched_planner_target: ($target_match_count > 0),
-                build_passed: $approved
-              },
-              changed_files: ($changed_files | split(" ") | map(select(length > 0))),
-              matched_target_files: ($matched_target_files | split(" ") | map(select(length > 0))),
-              unplanned_files: ($unplanned_files | split(" ") | map(select(length > 0))),
-              blocking_issues: (if $approved then [] else [$reason] end)
-            }' > .ai/verdict.json
+            EVALUATOR_FIX_ATTEMPTS="$EVALUATION_ROUND"
+            {
+              echo "# Evaluator fix request"
+              echo
+              echo "The Evaluator rejected the generated implementation."
+              echo "Fix only the issues listed below, then stop. Do not add unrelated features or refactors."
+              echo
+              echo "## Evaluation"
+              cat .ai/evaluation.md
+            } > .ai/fix-request.md
+
+            mapfile -t FIX_FILES < <(git diff --name-only -- ':!.ai' | grep -E '\.(ts|tsx|js|jsx|css|json|config\.js)$' || true)
+            if [ "${#FIX_FILES[@]}" -eq 0 ]; then
+              mapfile -t FIX_FILES < <(sed '/^[[:space:]]*$/d' .ai/target-files.txt)
+            fi
+
+            aider "${FIX_FILES[@]}" --message-file .ai/fix-request.md --yes --no-auto-commits
+
+            if ! npm run build > .ai/build.log 2>&1; then
+              echo "Generator fix after evaluator rejection did not pass build." >> .ai/evaluation.md
+            fi
+          done
 
           if [ "$EVALUATION_STATUS" != "approved" ]; then
             gh issue comment "$ISSUE_NUMBER" --body-file .ai/evaluation.md
@@ -285,7 +323,7 @@ jobs:
             exit 1
           fi
 
-          rm -f .ai/build.log .ai/build-sanitized.log .ai/build-focused.log .ai/repair.md
+          rm -f .ai/build.log .ai/build-sanitized.log .ai/build-focused.log .ai/repair.md .ai/fix-request.md
 
           # GITHUB_TOKENでブランチをpushする
           git remote set-url origin "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
@@ -338,3 +376,50 @@ jobs:
           path: .ai/pr.json
           include-hidden-files: true
           if-no-files-found: error
+
+      - name: Notify Slack on failure
+        if: failure()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          mkdir -p .ai
+
+          if [ -z "$SLACK_WEBHOOK_URL" ]; then
+            echo "SLACK_WEBHOOK_URL is not configured; skipping Slack notification."
+            exit 0
+          fi
+
+          ISSUE_NUMBER="unknown"
+          ISSUE_TITLE="unknown"
+          REASON="AI Generator / Evaluator が停止しました。Actionsログを確認してください。"
+
+          if [ -f .ai/plan.json ]; then
+            ISSUE_NUMBER="$(jq -r '.issue_number // "unknown"' .ai/plan.json)"
+            ISSUE_TITLE="$(jq -r '.summary // "unknown"' .ai/plan.json)"
+          fi
+          if [ -f .ai/verdict.json ]; then
+            REASON="$(jq -r '.reason // "Evaluator rejected the implementation."' .ai/verdict.json)"
+          elif [ -f .ai/evaluation.md ]; then
+            REASON="$(sed -n '1,12p' .ai/evaluation.md | tr '\n' ' ')"
+          fi
+
+          jq -n \
+            --arg title "AI Generator failed for Issue #${ISSUE_NUMBER}" \
+            --arg issue "#${ISSUE_NUMBER}: ${ISSUE_TITLE}" \
+            --arg reason "$REASON" \
+            --arg run_url "$RUN_URL" \
+            '{
+              text: $title,
+              blocks: [
+                { type: "section", text: { type: "mrkdwn", text: "*AIパイプライン停止*\\n*フェーズ:* Generator / Evaluator\\n*状態:* 失敗" } },
+                { type: "section", text: { type: "mrkdwn", text: ("*Issue:* " + $issue + "\\n*理由:* " + $reason) } },
+                { type: "section", text: { type: "mrkdwn", text: ("<" + $run_url + "|Actionsログを開く>") } }
+              ]
+            }' > .ai/slack-failure-payload.json
+
+          curl -sS -X POST \
+            -H 'Content-Type: application/json' \
+            --data @.ai/slack-failure-payload.json \
+            "$SLACK_WEBHOOK_URL"
