@@ -5,9 +5,9 @@ on:
     types: [labeled]
 
 permissions:
-  contents: write
-  pull-requests: write
-  issues: write
+  contents: write      
+  pull-requests: write 
+  issues: write        
 
 jobs:
   implement:
@@ -25,59 +25,61 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: '3.11'
 
       - name: Install Aider
         run: pip install aider-chat
 
       - name: Run AI Coder (Aider)
         env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_KEY }}
-          GITHUB_TOKEN: ${{ secrets.AI_PAT }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_KEY }} 
+          GITHUB_TOKEN: ${{ secrets.AI_PAT }}        
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-
-          BRANCH_NAME="ai-feature/issue-${{ github.event.issue.number }}"
+          
+          # ブランチ名をIssue番号＋タイムスタンプで完全ユニーク化（PR作成失敗を100%防ぐ）
+          BRANCH_NAME="ai-feature/issue-${{ github.event.issue.number }}-$(date +%s)"
           git checkout -b $BRANCH_NAME
-
-          # Issueの内容をファイルに書き出し、Aiderに渡す（文字化け・改行エラー対策）
+          
+          # Issueの内容を一時ファイルに書き出し（特殊文字や改行によるシェル崩れを防止）
           cat << 'EOF' > issue_prompt.txt
           Issueタイトル: ${{ github.event.issue.title }}
           Issue詳細:
           ${{ github.event.issue.body }}
           EOF
-
+          
+          #指示書ファイルを使ってAIを実行
           aider --message-file issue_prompt.txt --yes --no-auto-commits
-
-          # 認証URLをあなたのPATで上書き（PR連鎖起動の鍵）
+          
+          # 認証URLをあなたのPATで上書き（レビューAIを連鎖起動させるための鍵）
           git remote set-url origin "https://x-access-token:${{ secrets.AI_PAT }}@github.com/${{ github.repository }}.git"
-
+          
           # 変更をステージング
           git add .
-
-          # 差分があるか確認
+          
+          # 判定：未コミットの変更、またはmainブランチとの間に差分があるか
           if [ -n "$(git status --porcelain)" ] || [ -n "$(git diff origin/main HEAD)" ]; then
             
-            # コミット実行
+            # まだコミットされていない場合はコミット
             if [ -n "$(git status --porcelain)" ]; then
               git commit -m "feat: implemented by AI for Issue #${{ github.event.issue.number }}"
             fi
             
-            # 強制プッシュ
+            # ブランチをプッシュ
             git push -f origin $BRANCH_NAME
             
-            # PR作成（AI_PATをトークンとして使用）
+            # PR作成（AI_PATをトークンとして使用し、人間が作ったように見せる）
             export GH_TOKEN="${{ secrets.AI_PAT }}"
             gh pr create --title "[AI] ${{ github.event.issue.title }}" --body "
             ## 🎯 課題の概要
             Closes #${{ github.event.issue.number }}
             Issueに基づき、AIが自律開発を行いました。
             
-            ## ⚠️ レビュアーへの確認点
-            - AI生成コードです。ロジックの意図が正しいか確認してください。
-            " --base main --head $BRANCH_NAME || echo "PR already exists."
+            ## ⚠️ 注意事項
+            - AI生成コードです。PR Reviewerエージェントがこの後自動起動します。
+            " --base main --head $BRANCH_NAME
           else
-            echo "差分なし。処理を終了します。"
+            echo "差分が検出されませんでした。リポジトリはすでに最新です。"
             exit 0
           fi
