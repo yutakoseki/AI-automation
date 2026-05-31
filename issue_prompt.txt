@@ -1,23 +1,19 @@
-Issueタイトル: TODO追加ボタンでタイトル・詳細・期限入力モーダル表示し、Top画面をスッキリさせる
+Issueタイトル: stylesが未定義のためコンパイルエラーとなる問題の修正
 Issue詳細:
 ## 概要
-TODO追加ボタンを押した際、タイトル・詳細・期限を入力できるモーダルを表示し、トップ（一覧）画面をスッキリさせてください。
+`pages/index.tsx` 内で `styles` が未定義のため、`ReferenceError: styles is not defined` エラーが発生する。該当箇所は `className={styles.main}` 等。
 
-## 詳細要件
-- 「追加」ボタン押下時に、
-    - タイトル
-    - 詳細
-    - 期限（日付型）
-  を入力できるモーダルを表示
-- モーダル経由で新規TODOを追加する形式に変更
-- Top画面には入力欄を表示せず、追加ボタンのみ残す
-- UIはシンプル・分かりやすく整える
-- 既存のUIからの変更点: 追加用入力欄・テキストを除外し、「追加」ボタンのみ表示
-
-## 参考
-- 下図の現UIから、入力欄部分をモーダル化してください
-
-<img alt="TODO追加UIイメージ" width="991" src="https://github.com/user-attachments/assets/5e11578e-18dd-46f0-8259-429a189c8849" />
+## 解決策（例）
+- `import styles from "../styles/Home.module.css"` 等該当するCSS/モジュールをインポートする記述を追加
+- または、該当コンポーネントのスタイリング実装に沿った方法でCSSを適用
 
 ---
-実装時は、使いやすさやデザインも配慮してください。
+エラー再現:
+```
+ReferenceError: styles is not defined
+pages/index.tsx (85:24)
+  <main className={styles.main}>
+```
+
+---
+**優先度高**: ページレンダリングが不能なため早急な修正が必要です。
