@@ -17,12 +17,15 @@ function createId(): string {
 export default function Home() {
   const [todos, setTodos] = useState<Todo[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [currentDateTime, setCurrentDateTime] = useState(format(new Date(), "yyyy/MM/dd HH:mm:ss"));
+  const [currentDateTime, setCurrentDateTime] = useState("");
 
   useEffect(() => {
-    const timer = setInterval(() => {
+    const updateDateTime = () => {
       setCurrentDateTime(format(new Date(), "yyyy/MM/dd HH:mm:ss"));
-    }, 1000);
+    };
+
+    updateDateTime();
+    const timer = setInterval(updateDateTime, 1000);
 
     return () => clearInterval(timer);
   }, []);
