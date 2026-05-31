@@ -20,6 +20,15 @@ jobs:
     timeout-minutes: 15
 
     steps:
+      - name: Download PR metadata
+        if: github.event_name == 'workflow_run'
+        uses: actions/download-artifact@v4
+        with:
+          name: ai-pr
+          path: .ai
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ github.event.workflow_run.id }}
+
       - name: Resolve pull request context
         id: pr
         env:
@@ -42,10 +51,16 @@ jobs:
             exit 0
           fi
 
-          HEAD_BRANCH="${{ github.event.workflow_run.head_branch }}"
-          PR_JSON="$(gh pr list --head "$HEAD_BRANCH" --state open --json number,title,body,baseRefName,headRefName --jq '.[0]')"
+          if [ -f .ai/pr.json ]; then
+            PR_NUMBER="$(jq -r '.number' .ai/pr.json)"
+            HEAD_BRANCH="$(jq -r '.branch' .ai/pr.json)"
+            PR_JSON="$(gh pr view "$PR_NUMBER" --json number,title,body,baseRefName,headRefName)"
+          else
+            HEAD_BRANCH="${{ github.event.workflow_run.head_branch }}"
+            PR_JSON="$(gh pr list --head "$HEAD_BRANCH" --state open --json number,title,body,baseRefName,headRefName --jq '.[0]')"
+          fi
           if [ -z "$PR_JSON" ] || [ "$PR_JSON" = "null" ]; then
-            echo "No open pull request found for head branch: $HEAD_BRANCH"
+            echo "No open pull request found for this reviewer run."
             exit 1
           fi
 
@@ -58,7 +73,7 @@ jobs:
           echo "EOF" >> "$GITHUB_OUTPUT"
           echo "base=$(jq -r '.baseRefName' <<< "$PR_JSON")" >> "$GITHUB_OUTPUT"
           echo "head=$(jq -r '.headRefName' <<< "$PR_JSON")" >> "$GITHUB_OUTPUT"
-          echo "checkout_ref=$HEAD_BRANCH" >> "$GITHUB_OUTPUT"
+          echo "checkout_ref=$(jq -r '.headRefName' <<< "$PR_JSON")" >> "$GITHUB_OUTPUT"
 
       - name: Checkout pull request
         uses: actions/checkout@v4

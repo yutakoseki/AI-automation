@@ -300,7 +300,7 @@ jobs:
 
           # PR作成
           export GH_TOKEN="${{ secrets.GITHUB_TOKEN }}"
-          gh pr create --title "[AI] ${ISSUE_TITLE}" --body "
+          PR_URL="$(gh pr create --title "[AI] ${ISSUE_TITLE}" --body "
           ## 課題の概要
           Closes #${ISSUE_NUMBER}
           Issueに基づき、AIが自律開発を行いました。
@@ -316,4 +316,25 @@ jobs:
 
           ## 注意事項
           - AI生成コードです。Evaluator を通過した場合のみPR化されています。
-          " --base main --head "$BRANCH_NAME"
+          " --base main --head "$BRANCH_NAME")"
+
+          PR_NUMBER="${PR_URL##*/}"
+          jq -n \
+            --arg number "$PR_NUMBER" \
+            --arg url "$PR_URL" \
+            --arg branch "$BRANCH_NAME" \
+            --arg issue_number "$ISSUE_NUMBER" \
+            '{
+              number: ($number | tonumber),
+              url: $url,
+              branch: $branch,
+              issue_number: ($issue_number | tonumber)
+            }' > .ai/pr.json
+
+      - name: Upload PR metadata
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-pr
+          path: .ai/pr.json
+          include-hidden-files: true
+          if-no-files-found: error
