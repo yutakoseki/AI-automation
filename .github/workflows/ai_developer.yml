@@ -126,14 +126,45 @@ jobs:
             fi
           fi
 
-          if [ "$EVALUATION_STATUS" = "approved" ] && npm run build; then
+          if [ "$EVALUATION_STATUS" = "approved" ] && npm run build > .ai/build.log 2>&1; then
             echo "- npm run build: passed" >> .ai/evaluation.md
           elif [ "$EVALUATION_STATUS" != "approved" ]; then
             echo "- npm run build: skipped because an earlier evaluator check failed" >> .ai/evaluation.md
           else
-            EVALUATION_STATUS="rejected"
-            EVALUATION_REASON="npm run build failed after generation."
-            echo "- npm run build: failed" >> .ai/evaluation.md
+            echo "- npm run build: failed; starting one automatic repair attempt" >> .ai/evaluation.md
+
+            {
+              echo "# Repair request"
+              echo
+              echo "The implementation generated from .ai/plan.md failed \`npm run build\`."
+              echo "Fix only the build/type errors below. Do not add unrelated features or refactors."
+              echo
+              echo "## Build log"
+              echo '```'
+              sed -n '1,240p' .ai/build.log
+              echo '```'
+            } > .ai/repair.md
+
+            mapfile -t REPAIR_FILES < <(git diff --name-only -- ':!.ai' | grep -E '\.(ts|tsx|js|jsx|css|json|config\.js)$' || true)
+            if [ "${#REPAIR_FILES[@]}" -eq 0 ]; then
+              mapfile -t REPAIR_FILES < <(sed '/^[[:space:]]*$/d' .ai/target-files.txt)
+            fi
+
+            aider "${REPAIR_FILES[@]}" --message-file .ai/repair.md --yes --no-auto-commits
+
+            if npm run build > .ai/build.log 2>&1; then
+              echo "- automatic repair: passed" >> .ai/evaluation.md
+              EVALUATION_REASON="Implementation produced a diff and npm run build passed after one repair attempt."
+            else
+              EVALUATION_STATUS="rejected"
+              EVALUATION_REASON="npm run build failed after one automatic repair attempt."
+              echo "- automatic repair: failed" >> .ai/evaluation.md
+              echo >> .ai/evaluation.md
+              echo "## Build log" >> .ai/evaluation.md
+              echo '```' >> .ai/evaluation.md
+              sed -n '1,240p' .ai/build.log >> .ai/evaluation.md
+              echo '```' >> .ai/evaluation.md
+            fi
           fi
 
           jq -n \
