@@ -231,6 +231,7 @@ jobs:
         with:
           name: ai-plan
           path: .ai/
+          include-hidden-files: true
           if-no-files-found: error
 
       - name: Comment plan on issue
