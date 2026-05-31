@@ -1,0 +1,136 @@
+{
+  "issue_number": 24,
+  "summary": "TailwindCSS を導入し、既存の CSS Modules を Tailwind ユーティリティクラスへ置き換えてモダンな UI/UX (レスポンシブ + ダークモード対応) に刷新する。旧 CSS Modules は削除する。",
+  "confidence": "high",
+  "target_files": [
+    "package.json",
+    "tailwind.config.js",
+    "postcss.config.js",
+    "styles/globals.css",
+    "pages/_app.tsx",
+    "pages/index.tsx",
+    "components/TodoItem.tsx",
+    "components/AddTodoModal.tsx",
+    "styles/Home.module.css",
+    "styles/TodoItem.module.css"
+  ],
+  "required_changes": [
+    {
+      "file": "package.json",
+      "change": "devDependencies に tailwindcss, postcss, autoprefixer を追加する。",
+      "reason": "Tailwind を利用するために必要なビルド時依存。",
+      "acceptance_criteria": [
+        "devDependencies に tailwindcss / postcss / autoprefixer が含まれる",
+        "npm install がエラーなく完了する"
+      ]
+    },
+    {
+      "file": "tailwind.config.js",
+      "change": "新規作成。content に ./pages/**/*.{js,ts,jsx,tsx} と ./components/**/*.{js,ts,jsx,tsx} を含め、darkMode: 'media' を指定する。",
+      "reason": "Tailwind がプロジェクト内のクラスを正しくスキャンし、ダークモード対応を有効化するため。",
+      "acceptance_criteria": [
+        "tailwind.config.js が存在する",
+        "content にプロジェクト内 TSX/JSX が含まれる",
+        "darkMode が 'media' で設定されている"
+      ]
+    },
+    {
+      "file": "postcss.config.js",
+      "change": "新規作成。tailwindcss と autoprefixer を plugins に登録する。",
+      "reason": "Next.js のビルドで PostCSS 経由で Tailwind を適用するため。",
+      "acceptance_criteria": [
+        "postcss.config.js が存在する",
+        "plugins に tailwindcss と autoprefixer が登録されている"
+      ]
+    },
+    {
+      "file": "styles/globals.css",
+      "change": "新規作成。@tailwind base; @tailwind components; @tailwind utilities; を記述し、必要なら body の基本色を @layer base で定義する。",
+      "reason": "Tailwind のレイヤーをアプリ全体に注入するエントリ。",
+      "acceptance_criteria": [
+        "@tailwind ディレクティブが 3 つすべて含まれる",
+        "body の基本背景色/文字色がライト/ダークの両方で読みやすい"
+      ]
+    },
+    {
+      "file": "pages/_app.tsx",
+      "change": "新規作成。styles/globals.css をインポートし、AppProps を受け取って <Component {...pageProps} /> を返す標準実装にする。",
+      "reason": "Next.js Pages Router でグローバル CSS を読み込む唯一の入口。",
+      "acceptance_criteria": [
+        "pages/_app.tsx が存在する",
+        "styles/globals.css をインポートしている",
+        "next dev / next build が型エラーなく通る"
+      ]
+    },
+    {
+      "file": "pages/index.tsx",
+      "change": "styles/Home.module.css のインポートと className 参照を削除し、Tailwind ユーティリティクラスで再スタイリングする。レスポンシブ (sm/md/lg) とダークモード (dark:) に対応。レイアウトはカード型コンテナ＋モダンな見出し/ボタン構成。",
+      "reason": "Home 画面を Tailwind ベースのモダン UI に刷新する。",
+      "acceptance_criteria": [
+        "styles/Home.module.css への参照が残っていない",
+        "ボタン (追加 / すべて完了) が視覚的に区別され、フォーカスリングを持つ",
+        "モバイル幅でレイアウトが崩れない",
+        "ダークモードで文字と背景のコントラストが確保される"
+      ]
+    },
+    {
+      "file": "components/TodoItem.tsx",
+      "change": "styles/TodoItem.module.css の参照を削除し、Tailwind でカード型 TODO アイテムに刷新する。完了時は line-through と不透明度低下、編集/保存/削除ボタンを色で区別。",
+      "reason": "アイテム表示を直感的かつアクセシブルなモダン UI に刷新する。",
+      "acceptance_criteria": [
+        "styles/TodoItem.module.css への参照が残っていない",
+        "完了済み TODO に line-through が当たる",
+        "ボタンに aria-label が引き続き付与される",
+        "編集モード時の入力欄が縦に整列して見やすい"
+      ]
+    },
+    {
+      "file": "components/AddTodoModal.tsx",
+      "change": "styles/TodoItem.module.css の参照を削除し、Tailwind でオーバーレイ＋中央寄せモーダルに刷新する。フォーム要素は適切な間隔・フォーカスリングを持つ。",
+      "reason": "モーダル UI をモダンかつアクセシブルに刷新する。",
+      "acceptance_criteria": [
+        "styles/TodoItem.module.css への参照が残っていない",
+        "モーダルが画面中央に表示され、背景にオーバーレイが掛かる",
+        "Add / Close ボタンの役割が視覚的に区別される"
+      ]
+    },
+    {
+      "file": "styles/Home.module.css",
+      "change": "削除する。",
+      "reason": "Tailwind 置換後は不要。Issue で『不要になれば削除』と指示あり。",
+      "acceptance_criteria": [
+        "ファイルがリポジトリから削除されている",
+        "どこからもインポートされていない"
+      ]
+    },
+    {
+      "file": "styles/TodoItem.module.css",
+      "change": "削除する。",
+      "reason": "Tailwind 置換後は不要。Issue で『不要になれば削除』と指示あり。",
+      "acceptance_criteria": [
+        "ファイルがリポジトリから削除されている",
+        "どこからもインポートされていない"
+      ]
+    }
+  ],
+  "commands_to_run": [
+    "npm install",
+    "npm run build"
+  ],
+  "out_of_scope": [
+    "ローカルストレージや API による TODO の永続化",
+    "ユーザー切り替え式 (class 戦略) のダークモードトグル UI の実装",
+    "既存の追加/編集/削除/完了ロジックの仕様変更",
+    "アニメーションライブラリの導入"
+  ],
+  "risks": [
+    "pages/_app.tsx が存在しないため、グローバル CSS 取り込み口を新規作成する必要がある",
+    "CSS Modules への参照が一部でも残ると未削除ファイルへの import エラーになる",
+    "tailwind.config.js の content 設定誤りで本番ビルド時にクラスがパージされる可能性",
+    "Tailwind と autoprefixer のバージョンは package.json への範囲指定 (^) で柔軟にし、ロックファイル再生成は実装エージェント側で実施"
+  ],
+  "open_questions": [
+    "ダークモードは OS 追従 (media) で十分か、トグル UI (class) まで踏み込むか — 今回は最小実装として media を採用",
+    "デザインテーマカラー (アクセントカラー) の指定 — 指定なきため Tailwind の indigo / slate 系を採用予定"
+  ]
+}

@@ -1,5 +1,4 @@
 import { useState } from "react";
-import styles from "@/styles/TodoItem.module.css";
 
 type AddTodoModalProps = {
   onAdd: (title: string, details: string, deadline: string) => void;
@@ -25,34 +24,36 @@ export default function AddTodoModal({ onAdd, onClose }: AddTodoModalProps) {
   };
 
   return (
-    <div className={styles.modal}>
-      <div className={styles.modalContent}>
-        <h2>Add New TODO</h2>
+    <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full">
+      <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+        <h2 className="text-lg font-bold mb-4">Add New TODO</h2>
         <input
           type="text"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="Enter title..."
-          className={styles.input}
+          className="w-full mb-2 p-2 border rounded"
         />
         <textarea
           value={details}
           onChange={(e) => setDetails(e.target.value)}
           placeholder="Enter details..."
-          className={styles.textarea}
+          className="w-full mb-2 p-2 border rounded"
         />
         <input
           type="date"
           value={deadline}
           onChange={(e) => setDeadline(e.target.value)}
-          className={styles.input}
+          className="w-full mb-2 p-2 border rounded"
         />
-        <button onClick={handleAdd} className={styles.addButton}>
-          Add
-        </button>
-        <button onClick={onClose} className={styles.closeButton}>
-          Close
-        </button>
+        <div className="flex justify-end space-x-2">
+          <button onClick={handleAdd} className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-1 px-2 rounded">
+            Add
+          </button>
+          <button onClick={onClose} className="bg-gray-500 hover:bg-gray-700 text-white font-bold py-1 px-2 rounded">
+            Close
+          </button>
+        </div>
       </div>
     </div>
   );
