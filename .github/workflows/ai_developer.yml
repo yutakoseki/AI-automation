@@ -86,6 +86,7 @@ jobs:
           - Do not perform unrelated refactors or large rewrites.
           - Prefer a useful, reviewable pull request over attempting to solve every out-of-scope item.
           - If a requested file is missing, create it only when the plan explicitly requires a new file; otherwise choose the closest existing file from the target list.
+          - Do not run npm install, npm run build, npm run dev, or other shell commands. The evaluator will run verification commands after editing.
           EOF
 
           mapfile -t TARGET_FILES < <(sed '/^[[:space:]]*$/d' .ai/target-files.txt)
@@ -131,34 +132,45 @@ jobs:
           elif [ "$EVALUATION_STATUS" != "approved" ]; then
             echo "- npm run build: skipped because an earlier evaluator check failed" >> .ai/evaluation.md
           else
-            echo "- npm run build: failed; starting one automatic repair attempt" >> .ai/evaluation.md
+            echo "- npm run build: failed; starting automatic repair attempts" >> .ai/evaluation.md
 
-            {
-              echo "# Repair request"
-              echo
-              echo "The implementation generated from .ai/plan.md failed \`npm run build\`."
-              echo "Fix only the build/type errors below. Do not add unrelated features or refactors."
-              echo
-              echo "## Build log"
-              echo '```'
-              sed -n '1,240p' .ai/build.log
-              echo '```'
-            } > .ai/repair.md
+            EVALUATION_STATUS="rejected"
+            EVALUATION_REASON="npm run build failed after automatic repair attempts."
 
-            mapfile -t REPAIR_FILES < <(git diff --name-only -- ':!.ai' | grep -E '\.(ts|tsx|js|jsx|css|json|config\.js)$' || true)
-            if [ "${#REPAIR_FILES[@]}" -eq 0 ]; then
-              mapfile -t REPAIR_FILES < <(sed '/^[[:space:]]*$/d' .ai/target-files.txt)
-            fi
+            for attempt in 1 2; do
+              sed -E '/https?:\/\//d; /Next.js now collects completely anonymous telemetry/d; /No build cache found/d' .ai/build.log > .ai/build-sanitized.log
 
-            aider "${REPAIR_FILES[@]}" --message-file .ai/repair.md --yes --no-auto-commits
+              {
+                echo "# Repair request"
+                echo
+                echo "The implementation generated from .ai/plan.md failed npm run build."
+                echo "Fix only the build/type errors below. Do not add unrelated features or refactors."
+                echo "Do not browse the web. Do not run shell commands. Only edit files."
+                echo
+                echo "## Build log"
+                echo '```'
+                sed -n '1,220p' .ai/build-sanitized.log
+                echo '```'
+              } > .ai/repair.md
 
-            if npm run build > .ai/build.log 2>&1; then
-              echo "- automatic repair: passed" >> .ai/evaluation.md
-              EVALUATION_REASON="Implementation produced a diff and npm run build passed after one repair attempt."
-            else
-              EVALUATION_STATUS="rejected"
-              EVALUATION_REASON="npm run build failed after one automatic repair attempt."
-              echo "- automatic repair: failed" >> .ai/evaluation.md
+              mapfile -t REPAIR_FILES < <(git diff --name-only -- ':!.ai' | grep -E '\.(ts|tsx|js|jsx|css|json|config\.js)$' || true)
+              if [ "${#REPAIR_FILES[@]}" -eq 0 ]; then
+                mapfile -t REPAIR_FILES < <(sed '/^[[:space:]]*$/d' .ai/target-files.txt)
+              fi
+
+              aider "${REPAIR_FILES[@]}" --message-file .ai/repair.md --yes --no-auto-commits
+
+              if npm run build > .ai/build.log 2>&1; then
+                echo "- automatic repair attempt ${attempt}: passed" >> .ai/evaluation.md
+                EVALUATION_STATUS="approved"
+                EVALUATION_REASON="Implementation produced a diff and npm run build passed after automatic repair."
+                break
+              fi
+
+              echo "- automatic repair attempt ${attempt}: failed" >> .ai/evaluation.md
+            done
+
+            if [ "$EVALUATION_STATUS" != "approved" ]; then
               echo >> .ai/evaluation.md
               echo "## Build log" >> .ai/evaluation.md
               echo '```' >> .ai/evaluation.md
