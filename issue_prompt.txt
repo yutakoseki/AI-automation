@@ -1,0 +1,23 @@
+Issueタイトル: Next.js: サーバーとクライアントで日付表示が一致せず hydration error が発生する
+Issue本文:
+Next.js アプリケーションで、サーバーでレンダリングされたHTMLとクライアントでレンダリングされたテキスト内容が一致しない "hydration error" が発生しています。
+
+エラー内容:
+```
+Unhandled Runtime Error
+Error: Text content does not match server-rendered HTML.
+See more info here: https://nextjs.org/docs/messages/react-hydration-error
+
+Text content did not match. Server: "5/31/2026, 7:16:39 AM" Client: "2026/5/31 7:16:38"
+
+<Home>
+  <main>
+    <div>
+      <div>
+        "5/31/2026, 7:16:39 AM"
+        "2026/5/31 7:16:38"
+Call Stack
+React
+```
+
+サーバーとクライアントの日時表示フォーマットやタイムゾーンが原因となる場合があります。日時表示の処理、または useEffect の利用有無、ローカライズ設定などを見直してください。

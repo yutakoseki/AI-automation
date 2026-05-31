@@ -1,4 +1,5 @@
 import { FormEvent, useState, useEffect } from "react";
+import { format } from "date-fns";
 import Head from "next/head";
 import TodoItem from "@/components/TodoItem";
 import type { Todo } from "@/types/todo";
@@ -18,11 +19,11 @@ export default function Home() {
   const [title, setTitle] = useState("");
   const [details, setDetails] = useState("");
   const [deadline, setDeadline] = useState("");
-  const [currentDateTime, setCurrentDateTime] = useState(new Date().toLocaleString());
+  const [currentDateTime, setCurrentDateTime] = useState(format(new Date(), "yyyy/MM/dd HH:mm:ss"));
 
   useEffect(() => {
     const timer = setInterval(() => {
-      setCurrentDateTime(new Date().toLocaleString());
+      setCurrentDateTime(format(new Date(), "yyyy/MM/dd HH:mm:ss"));
     }, 1000);
 
     return () => clearInterval(timer);
