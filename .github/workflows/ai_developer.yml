@@ -1,18 +1,19 @@
-name: AI Issue Worker
+name: AI Generator
 
 on:
-  issues:
-    types: [labeled]
+  workflow_run:
+    workflows: ["AI Planner"]
+    types: [completed]
 
 permissions:
-  contents: write      
-  pull-requests: write 
-  issues: write        
+  actions: read
+  contents: write
+  pull-requests: write
+  issues: write
 
 jobs:
   implement:
-    # 'ai-ready'ラベルが貼られたときのみ実行
-    if: github.event.label.name == 'ai-ready'
+    if: github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -22,64 +23,87 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Download planner output
+        uses: actions/download-artifact@v4
+        with:
+          name: ai-plan
+          path: .ai
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ github.event.workflow_run.id }}
+
+      - name: Validate planner output
+        run: |
+          set -euo pipefail
+
+          test -f .ai/plan.md
+          test -f .ai/plan.json
+          test -f .ai/target-files.txt
+
+          jq empty .ai/plan.json
+
+          target_count="$(jq '.target_files | length' .ai/plan.json)"
+          if [ "$target_count" -eq 0 ]; then
+            echo "Generator refused to run: target_files is empty"
+            exit 1
+          fi
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
       - name: Install Aider
         run: pip install aider-chat
 
       - name: Run AI Coder (Aider)
         env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_KEY }} 
-          GITHUB_TOKEN: ${{ secrets.AI_PAT }}        
+          OPENAI_API_KEY: ${{ secrets.OPENAI_KEY }}
+          GITHUB_TOKEN: ${{ secrets.AI_PAT }}
         run: |
+          set -euo pipefail
+
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          
+
+          ISSUE_NUMBER="$(jq -r '.issue_number' .ai/plan.json)"
+          ISSUE_TITLE="$(gh issue view "$ISSUE_NUMBER" --json title --jq '.title')"
+
           # ブランチ名をIssue番号＋タイムスタンプで完全ユニーク化（PR作成失敗を100%防ぐ）
-          BRANCH_NAME="ai-feature/issue-${{ github.event.issue.number }}-$(date +%s)"
-          git checkout -b $BRANCH_NAME
-          
-          # Issueの内容を一時ファイルに書き出し（特殊文字や改行によるシェル崩れを防止）
-          cat << 'EOF' > issue_prompt.txt
-          Issueタイトル: ${{ github.event.issue.title }}
-          Issue詳細:
-          ${{ github.event.issue.body }}
-          EOF
-          
-          #指示書ファイルを使ってAIを実行
-          aider --message-file issue_prompt.txt --yes --no-auto-commits
-          
+          BRANCH_NAME="ai-feature/issue-${ISSUE_NUMBER}-$(date +%s)"
+          git checkout -b "$BRANCH_NAME"
+
+          # Plannerが特定した対象ファイルと実装計画をAiderに渡す
+          mapfile -t TARGET_FILES < <(sed '/^[[:space:]]*$/d' .ai/target-files.txt)
+          aider "${TARGET_FILES[@]}" --message-file .ai/plan.md --yes --no-auto-commits
+
+          if [ -z "$(git status --porcelain --untracked-files=all -- ':!.ai')" ]; then
+            echo "Generator produced no changes"
+            exit 1
+          fi
+
           # 認証URLをあなたのPATで上書き（レビューAIを連鎖起動させるための鍵）
           git remote set-url origin "https://x-access-token:${{ secrets.AI_PAT }}@github.com/${{ github.repository }}.git"
-          
+
           # 変更をステージング
           git add .
-          
-          # 判定：未コミットの変更、またはmainブランチとの間に差分があるか
-          if [ -n "$(git status --porcelain)" ] || [ -n "$(git diff origin/main HEAD)" ]; then
-            
-            # まだコミットされていない場合はコミット
-            if [ -n "$(git status --porcelain)" ]; then
-              git commit -m "feat: implemented by AI for Issue #${{ github.event.issue.number }}"
-            fi
-            
-            # ブランチをプッシュ
-            git push -f origin $BRANCH_NAME
-            
-            # PR作成（AI_PATをトークンとして使用し、人間が作ったように見せる）
-            export GH_TOKEN="${{ secrets.AI_PAT }}"
-            gh pr create --title "[AI] ${{ github.event.issue.title }}" --body "
-            ## 🎯 課題の概要
-            Closes #${{ github.event.issue.number }}
-            Issueに基づき、AIが自律開発を行いました。
-            
-            ## ⚠️ 注意事項
-            - AI生成コードです。PR Reviewerエージェントがこの後自動起動します。
-            " --base main --head $BRANCH_NAME
-          else
-            echo "差分が検出されませんでした。リポジトリはすでに最新です。"
-            exit 0
-          fi
+
+          git commit -m "feat: implemented by AI for Issue #${ISSUE_NUMBER}"
+
+          # ブランチをプッシュ
+          git push -f origin "$BRANCH_NAME"
+
+          # PR作成（AI_PATをトークンとして使用し、人間が作ったように見せる）
+          export GH_TOKEN="${{ secrets.AI_PAT }}"
+          gh pr create --title "[AI] ${ISSUE_TITLE}" --body "
+          ## 課題の概要
+          Closes #${ISSUE_NUMBER}
+          Issueに基づき、AIが自律開発を行いました。
+
+          ## Planner output
+          - .ai/plan.md
+          - .ai/plan.json
+          - .ai/target-files.txt
+
+          ## 注意事項
+          - AI生成コードです。PR Reviewerエージェントがこの後自動起動します。
+          " --base main --head "$BRANCH_NAME"

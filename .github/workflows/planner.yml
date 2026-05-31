@@ -1,0 +1,135 @@
+name: AI Planner
+
+on:
+  issues:
+    types: [labeled]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  plan:
+    if: github.event.label.name == 'ai-ready'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run Claude Code Planner
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            You are the Planner agent for an autonomous development pipeline.
+
+            Your task:
+            - Read the GitHub Issue.
+            - Explore this repository.
+            - Identify the files that most likely need changes.
+            - Produce an implementation plan for a separate coding agent.
+
+            Important restrictions:
+            - Do not modify application source code.
+            - Do not fix the issue.
+            - Do not create commits.
+            - Do not create a pull request.
+            - Only create or update files under .ai/.
+
+            Create these files:
+
+            1. .ai/plan.md
+            Human-readable implementation plan.
+
+            2. .ai/plan.json
+            Machine-readable implementation plan.
+
+            3. .ai/target-files.txt
+            One file path per line.
+
+            plan.json schema:
+
+            {
+              "issue_number": number,
+              "summary": "string",
+              "confidence": "high | medium | low",
+              "target_files": [
+                "path/to/file"
+              ],
+              "required_changes": [
+                {
+                  "file": "path/to/file",
+                  "change": "string",
+                  "reason": "string",
+                  "acceptance_criteria": [
+                    "string"
+                  ]
+                }
+              ],
+              "commands_to_run": [
+                "string"
+              ],
+              "out_of_scope": [
+                "string"
+              ],
+              "risks": [
+                "string"
+              ],
+              "open_questions": [
+                "string"
+              ]
+            }
+
+            Rules:
+            - target_files must not be empty unless the issue is impossible to analyze.
+            - If confidence is low, still provide the best candidate files.
+            - Prefer concrete file paths over general advice.
+            - Do not say "no changes needed" unless you can prove it from the repository.
+            - Do not include Markdown fences in plan.json.
+            - plan.json must be valid JSON.
+
+            GitHub Issue:
+            Title: ${{ github.event.issue.title }}
+
+            Body:
+            ${{ github.event.issue.body }}
+          claude_args: |
+            --max-turns 10
+
+      - name: Validate planner output
+        run: |
+          set -euo pipefail
+
+          test -f .ai/plan.md
+          test -f .ai/plan.json
+          test -f .ai/target-files.txt
+
+          jq empty .ai/plan.json
+
+          target_count="$(jq '.target_files | length' .ai/plan.json)"
+          if [ "$target_count" -eq 0 ]; then
+            echo "Planner failed: target_files is empty"
+            exit 1
+          fi
+
+          while IFS= read -r file; do
+            [ -z "$file" ] && continue
+            if [ ! -e "$file" ]; then
+              echo "Warning: target file does not exist: $file"
+            fi
+          done < .ai/target-files.txt
+
+      - name: Upload planner output
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-plan
+          path: .ai/
+          if-no-files-found: error
+
+      - name: Comment plan on issue
+        env:
+          GH_TOKEN: ${{ secrets.AI_PAT }}
+        run: |
+          gh issue comment "${{ github.event.issue.number }}" \
+            --body-file .ai/plan.md
