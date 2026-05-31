@@ -242,4 +242,8 @@ jobs:
           set -euo pipefail
 
           ISSUE_NUMBER="${{ github.event.issue.number }}"
-          gh issue edit "$ISSUE_NUMBER" --remove-label ai-needs-info || true
+          if gh issue view "$ISSUE_NUMBER" --json labels --jq '.labels[].name' | grep -Fxq ai-needs-info; then
+            gh issue edit "$ISSUE_NUMBER" --remove-label ai-needs-info
+          else
+            echo "ai-needs-info label is not present; nothing to clear."
+          fi
