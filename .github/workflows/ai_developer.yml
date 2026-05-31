@@ -96,8 +96,8 @@ jobs:
             exit 1
           fi
 
-          # 認証URLをあなたのPATで上書き（レビューAIを連鎖起動させるための鍵）
-          git remote set-url origin "https://x-access-token:${{ secrets.AI_PAT }}@github.com/${{ github.repository }}.git"
+          # GITHUB_TOKENでブランチをpushする
+          git remote set-url origin "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
 
           # 変更をステージング
           git add .
@@ -107,8 +107,8 @@ jobs:
           # ブランチをプッシュ
           git push -f origin "$BRANCH_NAME"
 
-          # PR作成（AI_PATをトークンとして使用し、人間が作ったように見せる）
-          export GH_TOKEN="${{ secrets.AI_PAT }}"
+          # PR作成
+          export GH_TOKEN="${{ secrets.GITHUB_TOKEN }}"
           gh pr create --title "[AI] ${ISSUE_TITLE}" --body "
           ## 課題の概要
           Closes #${ISSUE_NUMBER}
