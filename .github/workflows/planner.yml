@@ -191,7 +191,7 @@ jobs:
       - name: Comment clarification request on issue
         if: steps.validate.outputs.mode == 'needs_info'
         env:
-          GH_TOKEN: ${{ secrets.AI_PAT }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
 
@@ -237,7 +237,7 @@ jobs:
       - name: Comment plan on issue
         if: steps.validate.outputs.mode == 'plan'
         env:
-          GH_TOKEN: ${{ secrets.AI_PAT }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           ISSUE_NUMBER="${{ github.event.issue.number }}"
           gh issue edit "$ISSUE_NUMBER" --remove-label ai-needs-info || true
