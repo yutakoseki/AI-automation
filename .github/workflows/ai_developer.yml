@@ -106,17 +106,24 @@ jobs:
             echo "- Generated diff exists: passed"
           } > .ai/evaluation.md
 
-          if git diff --name-only -- ':!.ai' | grep -qx 'package.json'; then
-            echo "- npm install: running because package.json changed" >> .ai/evaluation.md
+          if [ -f package-lock.json ]; then
+            echo "- npm ci: running before build" >> .ai/evaluation.md
+            if npm ci; then
+              echo "- npm ci: passed" >> .ai/evaluation.md
+            else
+              EVALUATION_STATUS="rejected"
+              EVALUATION_REASON="npm ci failed before build."
+              echo "- npm ci: failed" >> .ai/evaluation.md
+            fi
+          else
+            echo "- npm install: running before build" >> .ai/evaluation.md
             if npm install; then
               echo "- npm install: passed" >> .ai/evaluation.md
             else
               EVALUATION_STATUS="rejected"
-              EVALUATION_REASON="npm install failed after package.json changed."
+              EVALUATION_REASON="npm install failed before build."
               echo "- npm install: failed" >> .ai/evaluation.md
             fi
-          else
-            echo "- npm install: skipped because package.json did not change" >> .ai/evaluation.md
           fi
 
           if [ "$EVALUATION_STATUS" = "approved" ] && npm run build; then
