@@ -1,21 +1,155 @@
-name: AI PR Agent
+name: AI Reviewer
 
 on:
   pull_request:
     types: [opened, reopened, synchronize]
+  workflow_run:
+    workflows: ["AI Generator"]
+    types: [completed]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+  id-token: write
 
 jobs:
-  pr_agent_job:
+  review:
+    if: github.event_name == 'pull_request' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
-    permissions:
-      issues: write
-      pull-requests: write
-      contents: parse
-    name: Run pr-agent
+    timeout-minutes: 15
+
     steps:
-      - name: PR Agent Action
-        uses: Codium-ai/pr-agent@main
+      - name: Resolve pull request context
+        id: pr
         env:
-          OPENAI_KEY: ${{ secrets.OPENAI_KEY }} # OpenAIのAPIキーを使う場合
-          # ※GitHub Copilotのトークンを利用する場合は設定方法が異なりますが、
-          # 通常はOpenAIかAnthropicのAPIキーをRepository Secretsに登録します。
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "number=${{ github.event.pull_request.number }}" >> "$GITHUB_OUTPUT"
+            echo "title<<EOF" >> "$GITHUB_OUTPUT"
+            echo "${{ github.event.pull_request.title }}" >> "$GITHUB_OUTPUT"
+            echo "EOF" >> "$GITHUB_OUTPUT"
+            echo "body<<EOF" >> "$GITHUB_OUTPUT"
+            echo "${{ github.event.pull_request.body }}" >> "$GITHUB_OUTPUT"
+            echo "EOF" >> "$GITHUB_OUTPUT"
+            echo "base=${{ github.event.pull_request.base.ref }}" >> "$GITHUB_OUTPUT"
+            echo "head=${{ github.event.pull_request.head.ref }}" >> "$GITHUB_OUTPUT"
+            echo "checkout_ref=${{ github.event.pull_request.head.sha }}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          HEAD_BRANCH="${{ github.event.workflow_run.head_branch }}"
+          PR_JSON="$(gh pr list --head "$HEAD_BRANCH" --state open --json number,title,body,baseRefName,headRefName --jq '.[0]')"
+          if [ -z "$PR_JSON" ] || [ "$PR_JSON" = "null" ]; then
+            echo "No open pull request found for head branch: $HEAD_BRANCH"
+            exit 1
+          fi
+
+          echo "number=$(jq -r '.number' <<< "$PR_JSON")" >> "$GITHUB_OUTPUT"
+          echo "title<<EOF" >> "$GITHUB_OUTPUT"
+          jq -r '.title' <<< "$PR_JSON" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+          echo "body<<EOF" >> "$GITHUB_OUTPUT"
+          jq -r '.body // ""' <<< "$PR_JSON" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+          echo "base=$(jq -r '.baseRefName' <<< "$PR_JSON")" >> "$GITHUB_OUTPUT"
+          echo "head=$(jq -r '.headRefName' <<< "$PR_JSON")" >> "$GITHUB_OUTPUT"
+          echo "checkout_ref=$HEAD_BRANCH" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout pull request
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ steps.pr.outputs.checkout_ref }}
+
+      - name: Run Claude Code Reviewer
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          prompt: |
+            You are the Reviewer agent for an autonomous development pipeline.
+
+            Your task:
+            - Review this pull request for merge readiness.
+            - Reduce the final human reviewer's workload.
+            - Do not modify application source code.
+            - Do not create commits.
+            - Do not approve or merge the pull request.
+            - Only create or update .ai/review.md.
+
+            Review inputs:
+            - Pull request number: ${{ steps.pr.outputs.number }}
+            - Pull request title: ${{ steps.pr.outputs.title }}
+            - Pull request body: ${{ steps.pr.outputs.body }}
+            - Base branch: ${{ steps.pr.outputs.base }}
+            - Head branch: ${{ steps.pr.outputs.head }}
+            - If present, read .ai/plan.md, .ai/plan.json, .ai/evaluation.md, and .ai/verdict.json.
+            - Inspect the changed files and compare them with the plan and evaluator output.
+
+            Review criteria:
+            - Does the diff implement the plan?
+            - Did the evaluator pass?
+            - Are there build, type, dependency, or lockfile risks?
+            - Are there obvious regressions in existing behavior?
+            - Are there unrelated or excessive changes?
+            - Are there accessibility, UX, or maintainability concerns worth a human checking?
+
+            Create .ai/review.md with exactly this structure:
+
+            # AI Review
+
+            ## Verdict
+            One of:
+            - Ready for human review
+            - Needs careful human review
+            - Blocked
+
+            ## Summary
+            2-5 bullets summarizing what changed.
+
+            ## Merge Risk
+            One of: Low, Medium, High.
+            Explain briefly.
+
+            ## Evidence Checked
+            Bullets listing concrete evidence, including evaluator result if available.
+
+            ## Human Review Focus
+            Bullets telling the human exactly what to inspect before merging.
+
+            ## Blocking Issues
+            Use "None found." if no blocking issue is found.
+
+            ## Non-Blocking Concerns
+            Use "None found." if no concern is found.
+
+            Rules:
+            - Be concrete and cite file paths.
+            - Do not invent test results.
+            - If evaluator output is missing, say so and increase merge risk.
+            - If build/evaluator failed or verdict.json approved is false, verdict must be Blocked.
+            - Keep the review concise.
+          claude_args: |
+            --max-turns 12
+            --allowedTools "Read,Glob,Grep,LS,Write"
+            --disallowedTools "Bash,WebFetch,WebSearch,Edit"
+
+      - name: Validate review output
+        run: |
+          set -euo pipefail
+          test -f .ai/review.md
+          grep -q '^# AI Review' .ai/review.md
+          grep -q '^## Verdict' .ai/review.md
+          grep -q '^## Human Review Focus' .ai/review.md
+
+      - name: Comment review on pull request
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh pr comment "${{ steps.pr.outputs.number }}" --body-file .ai/review.md
