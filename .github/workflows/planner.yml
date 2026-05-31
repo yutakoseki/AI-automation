@@ -234,12 +234,12 @@ jobs:
           include-hidden-files: true
           if-no-files-found: error
 
-      - name: Comment plan on issue
+      - name: Clear clarification label
         if: steps.validate.outputs.mode == 'plan'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set -euo pipefail
+
           ISSUE_NUMBER="${{ github.event.issue.number }}"
           gh issue edit "$ISSUE_NUMBER" --remove-label ai-needs-info || true
-          gh issue comment "$ISSUE_NUMBER" \
-            --body-file .ai/plan.md
