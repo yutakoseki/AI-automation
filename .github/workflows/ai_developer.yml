@@ -97,10 +97,90 @@ jobs:
             exit 1
           fi
 
-          # Evaluator: PR作成前に機械的な検証を行う
-          EVALUATION_STATUS="approved"
-          EVALUATION_REASON="Implementation produced a diff and npm run build passed."
+          # Generator self-check: build/type errors are sent back to Aider before evaluation.
           REPAIR_ATTEMPTS=0
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
+
+          if ! npm run build > .ai/build.log 2>&1; then
+            for attempt in 1 2 3 4; do
+              REPAIR_ATTEMPTS="$attempt"
+              sed -E '/https?:\/\//d; /Next.js now collects completely anonymous telemetry/d; /No build cache found/d; /npm fund/d; /npm audit/d; /vulnerabilities/d' .ai/build.log > .ai/build-sanitized.log
+              if grep -q 'Failed to compile' .ai/build-sanitized.log; then
+                sed -n '/Failed to compile/,$p' .ai/build-sanitized.log > .ai/build-focused.log
+              else
+                cp .ai/build-sanitized.log .ai/build-focused.log
+              fi
+
+              {
+                echo "# Repair request"
+                echo
+                echo "The implementation generated from .ai/plan.md failed npm run build."
+                echo "This is repair attempt ${attempt} of 4."
+                echo "Fix only the build/type errors below. Do not add unrelated features, refactors, validation behavior changes, or styling changes."
+                echo "Preserve existing runtime behavior unless the build error requires a minimal type-safe adjustment."
+                echo "Do not browse the web. Do not run shell commands. Only edit files."
+                echo
+                echo "## Build log"
+                echo '```'
+                sed -n '1,220p' .ai/build-focused.log
+                echo '```'
+              } > .ai/repair.md
+
+              mapfile -t REPAIR_FILES < <(git diff --name-only -- ':!.ai' | grep -E '\.(ts|tsx|js|jsx|css|json|config\.js)$' || true)
+              if [ "${#REPAIR_FILES[@]}" -eq 0 ]; then
+                mapfile -t REPAIR_FILES < <(sed '/^[[:space:]]*$/d' .ai/target-files.txt)
+              fi
+
+              aider "${REPAIR_FILES[@]}" --message-file .ai/repair.md --yes --no-auto-commits
+
+              if npm run build > .ai/build.log 2>&1; then
+                break
+              fi
+            done
+          fi
+
+          if ! npm run build > .ai/build.log 2>&1; then
+            EVALUATION_STATUS="rejected"
+            EVALUATION_REASON="Generator could not produce buildable code after automatic repair attempts."
+            {
+              echo "# AI Evaluation"
+              echo
+              echo "## Checks"
+              echo "- Generator self-check: failed"
+              echo "- Automatic repair attempts: ${REPAIR_ATTEMPTS}"
+              echo
+              echo "## Build log"
+              echo '```'
+              sed -n '1,240p' .ai/build.log
+              echo '```'
+            } > .ai/evaluation.md
+
+            jq -n \
+              --arg reason "$EVALUATION_REASON" \
+              --argjson repair_attempts "$REPAIR_ATTEMPTS" \
+              '{
+                approved: false,
+                reason: $reason,
+                metrics: { repair_attempts: $repair_attempts },
+                checks: {
+                  generator_self_check: false,
+                  build_passed: false
+                },
+                blocking_issues: [$reason]
+              }' > .ai/verdict.json
+
+            gh issue comment "$ISSUE_NUMBER" --body-file .ai/evaluation.md
+            echo "$EVALUATION_REASON"
+            exit 1
+          fi
+
+          # Evaluator: no coding or repair here. It only judges the final generated diff.
+          EVALUATION_STATUS="approved"
+          EVALUATION_REASON="Generator produced buildable code and evaluator checks passed."
           CHANGED_FILES="$(git diff --name-only -- ':!.ai' | sort)"
           TARGET_FILES="$(sed '/^[[:space:]]*$/d' .ai/target-files.txt | sort)"
           MATCHED_TARGET_FILES="$(comm -12 <(printf '%s\n' "$CHANGED_FILES") <(printf '%s\n' "$TARGET_FILES") || true)"
@@ -115,9 +195,10 @@ jobs:
             echo "## Verdict Inputs"
             echo "- Plan summary: $(jq -r '.summary // "N/A"' .ai/plan.json)"
             echo "- Planner confidence: $(jq -r '.confidence // "unknown"' .ai/plan.json)"
-            echo "- Changed files: ${CHANGED_FILE_COUNT}"
-            echo "- Changed target files: ${TARGET_MATCH_COUNT}"
-            echo "- Unplanned changed files: ${UNPLANNED_FILE_COUNT}"
+            echo "- Final changed files: ${CHANGED_FILE_COUNT}"
+            echo "- Final changed target files: ${TARGET_MATCH_COUNT}"
+            echo "- Final unplanned changed files: ${UNPLANNED_FILE_COUNT}"
+            echo "- Generator automatic repair attempts: ${REPAIR_ATTEMPTS}"
             echo
             echo "## Changed Files"
             if [ -n "$CHANGED_FILES" ]; then
@@ -135,6 +216,7 @@ jobs:
             echo
             echo "## Checks"
             echo "- Generated diff exists: passed"
+            echo "- Generator self-check build: passed"
           } > .ai/evaluation.md
 
           if [ "$TARGET_MATCH_COUNT" -eq 0 ]; then
@@ -159,95 +241,13 @@ jobs:
             echo "- Dependency lockfile consistency: passed" >> .ai/evaluation.md
           fi
 
-          if [ -f package-lock.json ]; then
-            echo "- npm ci: running before build" >> .ai/evaluation.md
-            if npm ci; then
-              echo "- npm ci: passed" >> .ai/evaluation.md
-            else
-              EVALUATION_STATUS="rejected"
-              EVALUATION_REASON="npm ci failed before build."
-              echo "- npm ci: failed" >> .ai/evaluation.md
-            fi
+          if npm run build > .ai/build.log 2>&1; then
+            echo "- Evaluator final build: passed" >> .ai/evaluation.md
           else
-            echo "- npm install: running before build" >> .ai/evaluation.md
-            if npm install; then
-              echo "- npm install: passed" >> .ai/evaluation.md
-            else
-              EVALUATION_STATUS="rejected"
-              EVALUATION_REASON="npm install failed before build."
-              echo "- npm install: failed" >> .ai/evaluation.md
-            fi
-          fi
-
-          if [ "$EVALUATION_STATUS" = "approved" ] && npm run build > .ai/build.log 2>&1; then
-            echo "- npm run build: passed" >> .ai/evaluation.md
-          elif [ "$EVALUATION_STATUS" != "approved" ]; then
-            echo "- npm run build: skipped because an earlier evaluator check failed" >> .ai/evaluation.md
-          else
-            echo "- npm run build: failed; starting automatic repair attempts" >> .ai/evaluation.md
-
             EVALUATION_STATUS="rejected"
-            EVALUATION_REASON="npm run build failed after automatic repair attempts."
-
-            for attempt in 1 2; do
-              REPAIR_ATTEMPTS="$attempt"
-              sed -E '/https?:\/\//d; /Next.js now collects completely anonymous telemetry/d; /No build cache found/d' .ai/build.log > .ai/build-sanitized.log
-
-              {
-                echo "# Repair request"
-                echo
-                echo "The implementation generated from .ai/plan.md failed npm run build."
-                echo "Fix only the build/type errors below. Do not add unrelated features or refactors."
-                echo "Do not browse the web. Do not run shell commands. Only edit files."
-                echo
-                echo "## Build log"
-                echo '```'
-                sed -n '1,220p' .ai/build-sanitized.log
-                echo '```'
-              } > .ai/repair.md
-
-              mapfile -t REPAIR_FILES < <(git diff --name-only -- ':!.ai' | grep -E '\.(ts|tsx|js|jsx|css|json|config\.js)$' || true)
-              if [ "${#REPAIR_FILES[@]}" -eq 0 ]; then
-                mapfile -t REPAIR_FILES < <(sed '/^[[:space:]]*$/d' .ai/target-files.txt)
-              fi
-
-              aider "${REPAIR_FILES[@]}" --message-file .ai/repair.md --yes --no-auto-commits
-
-              if npm run build > .ai/build.log 2>&1; then
-                echo "- automatic repair attempt ${attempt}: passed" >> .ai/evaluation.md
-                EVALUATION_STATUS="approved"
-                EVALUATION_REASON="Implementation produced a diff and npm run build passed after automatic repair."
-                break
-              fi
-
-              echo "- automatic repair attempt ${attempt}: failed" >> .ai/evaluation.md
-            done
-
-            if [ "$EVALUATION_STATUS" != "approved" ]; then
-              echo >> .ai/evaluation.md
-              echo "## Build log" >> .ai/evaluation.md
-              echo '```' >> .ai/evaluation.md
-              sed -n '1,240p' .ai/build.log >> .ai/evaluation.md
-              echo '```' >> .ai/evaluation.md
-            fi
+            EVALUATION_REASON="Evaluator final build failed."
+            echo "- Evaluator final build: failed" >> .ai/evaluation.md
           fi
-
-          CHANGED_FILES="$(git diff --name-only -- ':!.ai' | sort)"
-          TARGET_FILES="$(sed '/^[[:space:]]*$/d' .ai/target-files.txt | sort)"
-          MATCHED_TARGET_FILES="$(comm -12 <(printf '%s\n' "$CHANGED_FILES") <(printf '%s\n' "$TARGET_FILES") || true)"
-          UNPLANNED_FILES="$(comm -23 <(printf '%s\n' "$CHANGED_FILES") <(printf '%s\n' "$TARGET_FILES") || true)"
-          TARGET_MATCH_COUNT="$(printf '%s\n' "$MATCHED_TARGET_FILES" | sed '/^$/d' | wc -l | tr -d ' ')"
-          CHANGED_FILE_COUNT="$(printf '%s\n' "$CHANGED_FILES" | sed '/^$/d' | wc -l | tr -d ' ')"
-          UNPLANNED_FILE_COUNT="$(printf '%s\n' "$UNPLANNED_FILES" | sed '/^$/d' | wc -l | tr -d ' ')"
-
-          {
-            echo
-            echo "## Final Metrics"
-            echo "- Final changed files: ${CHANGED_FILE_COUNT}"
-            echo "- Final changed target files: ${TARGET_MATCH_COUNT}"
-            echo "- Final unplanned changed files: ${UNPLANNED_FILE_COUNT}"
-            echo "- Automatic repair attempts: ${REPAIR_ATTEMPTS}"
-          } >> .ai/evaluation.md
 
           jq -n \
             --argjson approved "$([ "$EVALUATION_STATUS" = "approved" ] && echo true || echo false)" \
@@ -285,7 +285,7 @@ jobs:
             exit 1
           fi
 
-          rm -f .ai/build.log .ai/build-sanitized.log .ai/repair.md
+          rm -f .ai/build.log .ai/build-sanitized.log .ai/build-focused.log .ai/repair.md
 
           # GITHUB_TOKENでブランチをpushする
           git remote set-url origin "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
