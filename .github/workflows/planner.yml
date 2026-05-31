@@ -172,6 +172,10 @@ jobs:
           test -f .ai/target-files.txt
 
           jq empty .ai/plan.json
+          jq '.issue_number = $issue_number' \
+            --argjson issue_number "${{ github.event.issue.number }}" \
+            .ai/plan.json > .ai/plan.tmp.json
+          mv .ai/plan.tmp.json .ai/plan.json
 
           target_count="$(jq '.target_files | length' .ai/plan.json)"
           if [ "$target_count" -eq 0 ]; then

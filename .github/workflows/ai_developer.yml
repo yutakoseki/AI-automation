@@ -66,7 +66,11 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
-          ISSUE_NUMBER="$(jq -r '.issue_number' .ai/plan.json)"
+          ISSUE_NUMBER="$(jq -r '.issue_number // empty' .ai/plan.json)"
+          if [ -z "$ISSUE_NUMBER" ] || [ "$ISSUE_NUMBER" = "0" ]; then
+            echo "Invalid issue_number in .ai/plan.json"
+            exit 1
+          fi
           ISSUE_TITLE="$(gh issue view "$ISSUE_NUMBER" --json title --jq '.title')"
 
           # ブランチ名をIssue番号＋タイムスタンプで完全ユニーク化（PR作成失敗を100%防ぐ）
