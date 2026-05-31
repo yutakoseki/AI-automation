@@ -1,55 +1,54 @@
 {
-  "issue_number": 27,
-  "summary": "タスク編集をAddTodoModalと同等のモーダルUIに置き換え、TodoItemのインライン編集による白背景白文字とレイアウト崩れを解消する。新規にcomponents/EditTodoModal.tsxを作成し、components/TodoItem.tsxからインライン編集UIを削除してモーダル起動方式に変更する。pages/index.tsxのhandleEditシグネチャは維持するため変更しない。",
+  "issue_number": 29,
+  "summary": "AddTodoModal と EditTodoModal の className を既存のダークモード配色 (dark:bg-gray-900 / dark:bg-gray-800 / dark:text-gray-100 など) に揃え、レスポンシブ幅 (w-11/12 max-w-md)、フォーカスリング、role/aria-modal/aria-labelledby を追加する。ロジック・props・state は変更しない。",
   "confidence": "high",
   "target_files": [
-    "components/EditTodoModal.tsx",
-    "components/TodoItem.tsx"
+    "components/AddTodoModal.tsx",
+    "components/EditTodoModal.tsx"
   ],
   "required_changes": [
     {
-      "file": "components/EditTodoModal.tsx",
-      "change": "新規作成。AddTodoModal.tsxを雛形に、props { todo: Todo; onSave: (title: string, details: string, deadline: string) => void; onClose: () => void } を受け取る編集モーダルを実装する。useStateの初期値はprops.todoの値を使う。入力(input/textarea/date)はAddTodoModalと同一クラス(text-gray-900 placeholder-gray-500を含む)にする。オーバーレイ構造もAddTodoModalと同一(fixed inset-0 bg-gray-600 bg-opacity-50 ...)。見出しは『TODO を編集』、プライマリボタンは『保存』(bg-blue-500)、セカンダリは『キャンセル』(bg-gray-500)。Todo型は types/todo からインポートする。",
-      "reason": "編集もモーダル化し、追加時と同等のUIクオリティ・可読性を提供するため。",
+      "file": "components/AddTodoModal.tsx",
+      "change": "オーバーレイに dark:bg-black dark:bg-opacity-60 と role=\"dialog\" / aria-modal=\"true\" / aria-labelledby=\"add-todo-modal-title\" を追加。パネルの border を border border-gray-200 dark:border-gray-700 に、bg-white を bg-white dark:bg-gray-900 に、w-96 を w-11/12 max-w-md に変更。<h2> に id=\"add-todo-modal-title\" と dark:text-gray-100 を追加。全フォーム入力 (text input, textarea, date input) に bg-white dark:bg-gray-800、border border-gray-300 dark:border-gray-600、dark:text-gray-100、dark:placeholder-gray-400、focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 を追加。プライマリボタンに focus:outline-none focus:ring-2 focus:ring-blue-400 を追加。キャンセルボタンを bg-gray-500 hover:bg-gray-600 dark:bg-gray-700 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-400 に変更。props / state / handler は変更しない。",
+      "reason": "現状 bg-white と固定グレー系テキストでハードコードされており、pages/index.tsx などで適用されているダーク配色と視覚的に乖離しているため。",
       "acceptance_criteria": [
-        "components/EditTodoModal.tsx が新規作成されている",
-        "propsはtodo, onSave, onCloseの3つを受け取る",
-        "title/details/deadlineの初期値がprops.todoから設定される",
-        "全フォーム入力に text-gray-900 と placeholder-gray-500 が指定されている",
-        "保存ボタン押下でonSave(title, details, deadline)が呼ばれ、続けてonClose()される",
-        "キャンセルボタン押下で変更を反映せずonClose()される",
-        "オーバーレイとカードの構造がAddTodoModalと視覚的に統一されている"
+        "ダークモードでパネル背景が dark:bg-gray-900、テキストが dark:text-gray-100、入力背景が dark:bg-gray-800 になっている",
+        "ライトモード時の見た目に重大な後退がない",
+        "オーバーレイ要素に role=\"dialog\" と aria-modal=\"true\"、aria-labelledby=\"add-todo-modal-title\" が付与されている",
+        "<h2> に id=\"add-todo-modal-title\" が付与されている",
+        "パネル幅が w-11/12 max-w-md となり、360px 幅でも水平スクロールが発生しない",
+        "入力とボタンにフォーカス時の ring が表示される",
+        "onAdd / onClose のシグネチャと呼び出し順は変更されていない"
       ]
     },
     {
-      "file": "components/TodoItem.tsx",
-      "change": "インライン編集ブロック(input/textarea/[type=date]の3要素 と『保存』ボタン分岐)を削除する。代わりにisEditing(またはisEditOpen)stateで EditTodoModal の表示を制御し、『編集』ボタン押下でモーダルを開く。EditTodoModalのonSaveでは既存のprops.onEdit(todo.id, title, details, deadline)を呼ぶ。不要になったeditTitle/editDetails/editDeadlineのローカルstateは削除する。削除ボタンの挙動・aria-labelは現状維持。",
-      "reason": "インライン編集による白背景白文字・レイアウト崩れを解消し、編集導線を追加と同じモーダルに統一するため。",
+      "file": "components/EditTodoModal.tsx",
+      "change": "AddTodoModal と同一のダークモード・レスポンシブ・アクセシビリティ更新を適用する。aria-labelledby と <h2> の id は \"edit-todo-modal-title\" を使用。見出し文言 (『TODO を編集』) とボタン文言 (『保存』『キャンセル』) は維持。props / state / handler は変更しない。",
+      "reason": "AddTodoModal と構造がほぼ同一で同じ問題を抱えており、両モーダルを視覚的に統一する必要があるため。",
       "acceptance_criteria": [
-        "TodoItem内にinput/textarea/[type=date]のインライン編集要素が存在しない",
-        "『編集』ボタンが常時表示され、押下でEditTodoModalがマウントされる",
-        "EditTodoModalのonSaveで既存のprops.onEdit(id, title, details, deadline)が呼ばれる",
-        "TodoItemのli行レイアウト(チェックボックス・テキスト・編集/削除ボタン)が崩れない",
-        "削除ボタンの挙動・aria-labelは現状維持"
+        "AddTodoModal と同一のダーク配色クラスが適用されている",
+        "aria-labelledby=\"edit-todo-modal-title\" と <h2 id=\"edit-todo-modal-title\"> が設定されている",
+        "編集保存フロー (onSave(title, details, deadline) → onClose()) が変更されていない",
+        "todo の初期値読み込みロジックが変更されていない"
       ]
     }
   ],
   "commands_to_run": [
-    "npm install",
     "npm run build"
   ],
   "out_of_scope": [
-    "ESC/外側クリックでのモーダル閉鎖",
-    "入力バリデーションの強化やエラーメッセージ表示",
-    "AddTodoModalとEditTodoModalの共通化リファクタ",
-    "ダークモード配色の全面的見直し",
-    "pages/index.tsxのhandleEditシグネチャ変更"
+    "AddTodoModal と EditTodoModal を共通 <Modal> コンポーネントへ抽出するリファクタ",
+    "ESC キー / 背景クリックでのモーダル閉鎖、フォーカストラップ",
+    "明示的なダーク/ライト切替トグル UI の追加",
+    "<input type=\"date\"> のカレンダーポップアップ自体の暗色化",
+    "tailwind.config.js / styles/globals.css / pages/index.tsx など対象外ファイルへの変更"
   ],
   "risks": [
-    "既存テストがTodoItem内のインライン編集DOM構造に依存していれば失敗する可能性(現時点で__tests__は未確認)",
-    "AddTodoModalは外側クリック非対応のためEditTodoModalも同様だが、後続でUX指摘が来る可能性"
+    "tailwind.config.js を未確認だが、リポジトリ内で既に dark: クラスが広く使われており既定の media 戦略で動作している前提。class 戦略へ切り替えても同 dark: クラスは有効。",
+    "bg-opacity-* は Tailwind v4 で廃止予定だが、本プロジェクトは v3 をピン留めしているため安全。",
+    "<input type=\"date\"> のカレンダー UI はブラウザ実装に依存し完全な暗色化はできない。"
   ],
   "open_questions": [
-    "編集モーダルの見出し文言は『TODO を編集』で進めるが、『タスクを編集』が望ましい場合は後続で変更する"
+    "将来的に共通 Modal コンポーネントへ抽出する是非 — 本 PR ではスコープ外として保留。"
   ]
 }
