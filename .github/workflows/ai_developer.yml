@@ -100,12 +100,64 @@ jobs:
           # Evaluator: PR作成前に機械的な検証を行う
           EVALUATION_STATUS="approved"
           EVALUATION_REASON="Implementation produced a diff and npm run build passed."
+          REPAIR_ATTEMPTS=0
+          CHANGED_FILES="$(git diff --name-only -- ':!.ai' | sort)"
+          TARGET_FILES="$(sed '/^[[:space:]]*$/d' .ai/target-files.txt | sort)"
+          MATCHED_TARGET_FILES="$(comm -12 <(printf '%s\n' "$CHANGED_FILES") <(printf '%s\n' "$TARGET_FILES") || true)"
+          UNPLANNED_FILES="$(comm -23 <(printf '%s\n' "$CHANGED_FILES") <(printf '%s\n' "$TARGET_FILES") || true)"
+          TARGET_MATCH_COUNT="$(printf '%s\n' "$MATCHED_TARGET_FILES" | sed '/^$/d' | wc -l | tr -d ' ')"
+          CHANGED_FILE_COUNT="$(printf '%s\n' "$CHANGED_FILES" | sed '/^$/d' | wc -l | tr -d ' ')"
+          UNPLANNED_FILE_COUNT="$(printf '%s\n' "$UNPLANNED_FILES" | sed '/^$/d' | wc -l | tr -d ' ')"
+
           {
             echo "# AI Evaluation"
+            echo
+            echo "## Verdict Inputs"
+            echo "- Plan summary: $(jq -r '.summary // "N/A"' .ai/plan.json)"
+            echo "- Planner confidence: $(jq -r '.confidence // "unknown"' .ai/plan.json)"
+            echo "- Changed files: ${CHANGED_FILE_COUNT}"
+            echo "- Changed target files: ${TARGET_MATCH_COUNT}"
+            echo "- Unplanned changed files: ${UNPLANNED_FILE_COUNT}"
+            echo
+            echo "## Changed Files"
+            if [ -n "$CHANGED_FILES" ]; then
+              printf '%s\n' "$CHANGED_FILES" | sed 's/^/- /'
+            else
+              echo "- none"
+            fi
+            echo
+            echo "## Unplanned Changed Files"
+            if [ -n "$UNPLANNED_FILES" ]; then
+              printf '%s\n' "$UNPLANNED_FILES" | sed 's/^/- /'
+            else
+              echo "- none"
+            fi
             echo
             echo "## Checks"
             echo "- Generated diff exists: passed"
           } > .ai/evaluation.md
+
+          if [ "$TARGET_MATCH_COUNT" -eq 0 ]; then
+            EVALUATION_STATUS="rejected"
+            EVALUATION_REASON="Generated diff did not modify any planner target files."
+            echo "- Target file coverage: failed" >> .ai/evaluation.md
+          else
+            echo "- Target file coverage: passed" >> .ai/evaluation.md
+          fi
+
+          if printf '%s\n' "$UNPLANNED_FILES" | grep -Ev '^(package-lock\.json|\.ai/.*)?$' | grep -q .; then
+            echo "- Unplanned file changes: review required but non-blocking" >> .ai/evaluation.md
+          else
+            echo "- Unplanned file changes: passed" >> .ai/evaluation.md
+          fi
+
+          if printf '%s\n' "$CHANGED_FILES" | grep -qx 'package.json' && ! printf '%s\n' "$CHANGED_FILES" | grep -qx 'package-lock.json'; then
+            EVALUATION_STATUS="rejected"
+            EVALUATION_REASON="package.json changed without package-lock.json."
+            echo "- Dependency lockfile consistency: failed" >> .ai/evaluation.md
+          else
+            echo "- Dependency lockfile consistency: passed" >> .ai/evaluation.md
+          fi
 
           if [ -f package-lock.json ]; then
             echo "- npm ci: running before build" >> .ai/evaluation.md
@@ -138,6 +190,7 @@ jobs:
             EVALUATION_REASON="npm run build failed after automatic repair attempts."
 
             for attempt in 1 2; do
+              REPAIR_ATTEMPTS="$attempt"
               sed -E '/https?:\/\//d; /Next.js now collects completely anonymous telemetry/d; /No build cache found/d' .ai/build.log > .ai/build-sanitized.log
 
               {
@@ -179,14 +232,50 @@ jobs:
             fi
           fi
 
+          CHANGED_FILES="$(git diff --name-only -- ':!.ai' | sort)"
+          TARGET_FILES="$(sed '/^[[:space:]]*$/d' .ai/target-files.txt | sort)"
+          MATCHED_TARGET_FILES="$(comm -12 <(printf '%s\n' "$CHANGED_FILES") <(printf '%s\n' "$TARGET_FILES") || true)"
+          UNPLANNED_FILES="$(comm -23 <(printf '%s\n' "$CHANGED_FILES") <(printf '%s\n' "$TARGET_FILES") || true)"
+          TARGET_MATCH_COUNT="$(printf '%s\n' "$MATCHED_TARGET_FILES" | sed '/^$/d' | wc -l | tr -d ' ')"
+          CHANGED_FILE_COUNT="$(printf '%s\n' "$CHANGED_FILES" | sed '/^$/d' | wc -l | tr -d ' ')"
+          UNPLANNED_FILE_COUNT="$(printf '%s\n' "$UNPLANNED_FILES" | sed '/^$/d' | wc -l | tr -d ' ')"
+
+          {
+            echo
+            echo "## Final Metrics"
+            echo "- Final changed files: ${CHANGED_FILE_COUNT}"
+            echo "- Final changed target files: ${TARGET_MATCH_COUNT}"
+            echo "- Final unplanned changed files: ${UNPLANNED_FILE_COUNT}"
+            echo "- Automatic repair attempts: ${REPAIR_ATTEMPTS}"
+          } >> .ai/evaluation.md
+
           jq -n \
             --argjson approved "$([ "$EVALUATION_STATUS" = "approved" ] && echo true || echo false)" \
             --arg reason "$EVALUATION_REASON" \
-            --arg generated_diff "$(git diff --name-only -- ':!.ai' | tr '\n' ' ')" \
+            --argjson changed_file_count "$CHANGED_FILE_COUNT" \
+            --argjson target_match_count "$TARGET_MATCH_COUNT" \
+            --argjson unplanned_file_count "$UNPLANNED_FILE_COUNT" \
+            --argjson repair_attempts "$REPAIR_ATTEMPTS" \
+            --arg changed_files "$(printf '%s\n' "$CHANGED_FILES" | tr '\n' ' ')" \
+            --arg matched_target_files "$(printf '%s\n' "$MATCHED_TARGET_FILES" | tr '\n' ' ')" \
+            --arg unplanned_files "$(printf '%s\n' "$UNPLANNED_FILES" | tr '\n' ' ')" \
             '{
               approved: $approved,
               reason: $reason,
-              changed_files: ($generated_diff | split(" ") | map(select(length > 0))),
+              metrics: {
+                changed_file_count: $changed_file_count,
+                target_match_count: $target_match_count,
+                unplanned_file_count: $unplanned_file_count,
+                repair_attempts: $repair_attempts
+              },
+              checks: {
+                generated_diff: ($changed_file_count > 0),
+                touched_planner_target: ($target_match_count > 0),
+                build_passed: $approved
+              },
+              changed_files: ($changed_files | split(" ") | map(select(length > 0))),
+              matched_target_files: ($matched_target_files | split(" ") | map(select(length > 0))),
+              unplanned_files: ($unplanned_files | split(" ") | map(select(length > 0))),
               blocking_issues: (if $approved then [] else [$reason] end)
             }' > .ai/verdict.json
 
@@ -195,6 +284,8 @@ jobs:
             echo "$EVALUATION_REASON"
             exit 1
           fi
+
+          rm -f .ai/build.log .ai/build-sanitized.log .ai/repair.md
 
           # GITHUB_TOKENでブランチをpushする
           git remote set-url origin "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
