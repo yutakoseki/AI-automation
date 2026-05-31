@@ -1,41 +1,62 @@
-# Implementation Plan: タスク追加モーダルのテキスト色・ボタン文言の修正
+# 実装計画: タスク編集画面のモーダル化と可読性改善
 
-## Summary
-The Add TODO modal (`components/AddTodoModal.tsx`) renders on a white background, but
-inputs, placeholders, and the heading rely on inherited/default colors that can render
-white-on-white. The fix adds explicit Tailwind text-color utilities so the heading,
-input text, and placeholders are readable, and translates the two action buttons to
-Japanese ("追加" / "キャンセル"). All changes are confined to a single component.
+## Issue 概要
+タスク編集が現状 `components/TodoItem.tsx` 内のインライン編集で実装されているが:
+- フォーム入力に `text-*` が指定されておらず、白背景に白文字となり可読性がない
+- `flex` 内に input/textarea/date を並べているためレイアウトが崩れる
+- 追加 (`AddTodoModal`) はモーダル化済みなのに編集だけインライン
 
-## Target file
-- `components/AddTodoModal.tsx` — the only file containing the modal markup.
+要件:
+- 編集もモーダル化する (インライン編集を廃止)
+- テキスト色・プレースホルダ色を背景とコントラストのあるものにする
+- レイアウト崩れを直す
+- ボタン/フォームを追加時 (`AddTodoModal`) と同等の UI 指針に揃える
 
-## Required changes
-1. **Heading color** — `<h2>` (line 29): keep `text-lg font-bold mb-4` and add
-   `text-gray-900` so the title remains readable against the white modal background.
-2. **Form control text + placeholder color** — for each of the three controls (title
-   `<input type="text">` at line 30, details `<textarea>` at line 37, deadline
-   `<input type="date">` at line 43): keep `w-full mb-2 p-2 border rounded` and add
-   `text-gray-900 placeholder-gray-500` so typed text is dark and placeholders are
-   visible gray, not white.
-3. **Button labels** — change visible text of the first button (line 50–52) from `Add`
-   to `追加` and the second button (line 53–55) from `Close` to `キャンセル`. Do not
-   touch onClick handlers, className values, or layout.
+## アプローチ
+最小・安全な変更で `AddTodoModal` のパターンをそのまま編集にも適用する。
 
-## Out of scope
-- Translating the modal heading "Add New TODO" (issue does not request this).
-- Refactoring validation, layout, accessibility, or modal a11y attributes.
-- Edits to `styles/globals.css`, `tailwind.config.js`, or any other component/page.
+### 1. 新規ファイル `components/EditTodoModal.tsx` を作成
+`AddTodoModal.tsx` を雛形に、初期値として既存 todo の `title`/`details`/`deadline` を受け取り編集可能にする。
 
-## Verification
-- `npm install && npm run build` succeeds.
-- Manual: open the Add TODO modal, type into each field, and confirm:
-  - The heading and typed text are dark/readable on white.
-  - Placeholders are visible gray.
-  - The action buttons read `追加` and `キャンセル` and still work.
+- Props: `{ todo: Todo; onSave: (title: string, details: string, deadline: string) => void; onClose: () => void }`
+- 入力フィールドは追加モーダルと同一スタイル (`text-gray-900 placeholder-gray-500`)
+- 見出し: 「TODO を編集」
+- ボタン: 「保存」(blue) / 「キャンセル」(gray)
+- 日本語ラベル/プレースホルダ (タイトル/詳細/期限) を追加モーダルと統一
+- オーバーレイ構造 (`fixed inset-0 bg-gray-600 bg-opacity-50 ...`) も AddTodoModal と同一
 
-## Risks
-- Low. Pure className/text changes in one file; no logic, types, or props change.
+### 2. `components/TodoItem.tsx` をモーダル方式に変更
+- インライン編集の input/textarea/date ブロック (44–66 行付近) を削除
+- 「保存」ボタンの分岐を削除し、「編集」ボタンを常時表示
+- 「編集」ボタン押下で `EditTodoModal` を開くよう state を管理
+- 不要になった `editTitle` / `editDetails` / `editDeadline` のローカル state を削除 (モーダル側で保持)
+- 削除ボタンの挙動・aria-label は現状維持
+
+### 3. (変更なし) `pages/index.tsx`
+`handleEdit(id, title, details, deadline)` のシグネチャは変えないので `pages/index.tsx` の変更は不要。
+
+## 受け入れ条件
+- 「編集」を押すと追加時と同じ見た目のモーダルが開く
+- 既存の `title` / `details` / `deadline` がフォームに初期表示される
+- 「保存」で値が反映され、モーダルが閉じる
+- 「キャンセル」で変更を破棄してモーダルが閉じる
+- フォームのテキストとプレースホルダが背景とコントラストある色で表示される
+- TodoItem の行レイアウトが崩れない (チェックボックス + 内容 + 編集/削除ボタン)
+
+## スコープ外
+- 入力バリデーション強化やエラーメッセージ表示
+- ESC キー / 外側クリックでのモーダル閉鎖
+- `AddTodoModal` と `EditTodoModal` の共通化リファクタ
+- ダークモード配色の全面的見直し
+
+## リスク
+- 既存テストが TodoItem のインライン編集 DOM 構造に依存していれば失敗する可能性 (現時点で `__tests__` は未確認)
+- `AddTodoModal` は外側クリック非対応のため `EditTodoModal` も同様だが、後続で UX 指摘が来る可能性
+
+## 生成側へのガイド
+- 自律的に実装し、人間の確認を待たない
+- 計画が広い場合は本ドキュメントの最小スライスを実装する
+- 関係ない箇所のリファクタや大規模書き換えは行わない
 
 ## Generator constraints
 - Implement the plan autonomously without asking for human clarification.
@@ -43,3 +64,4 @@ Japanese ("追加" / "キャンセル"). All changes are confined to a single co
 - Do not perform unrelated refactors or large rewrites.
 - Prefer a useful, reviewable pull request over attempting to solve every out-of-scope item.
 - If a requested file is missing, create it only when the plan explicitly requires a new file; otherwise choose the closest existing file from the target list.
+- Do not run npm install, npm run build, npm run dev, or other shell commands. The evaluator will run verification commands after editing.
