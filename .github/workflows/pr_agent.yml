@@ -90,8 +90,8 @@ jobs:
             You are the Reviewer agent for an autonomous development pipeline.
 
             Your task:
-            - Review this pull request for merge readiness.
-            - Reduce the final human reviewer's workload.
+            - Review this pull request for merge readiness in Japanese.
+            - Reduce the final human reviewer's workload by giving a short, decision-oriented review.
             - Do not modify application source code.
             - Do not create commits.
             - Do not approve or merge the pull request.
@@ -114,40 +114,45 @@ jobs:
             - Are there unrelated or excessive changes?
             - Are there accessibility, UX, or maintainability concerns worth a human checking?
 
-            Create .ai/review.md with exactly this structure:
+            Create .ai/review.md in Japanese with exactly this structure:
 
-            # AI Review
+            # AIレビュー
 
-            ## Verdict
-            One of:
-            - Ready for human review
-            - Needs careful human review
-            - Blocked
+            ## 判定
+            One line only:
+            - 🟢 マージOK
+            - 🟡 要確認
+            - 🔴 マージNG
 
-            ## Summary
-            2-5 bullets summarizing what changed.
+            ## スコア
+            One line only. Use a number from 0 to 100.
+            Example: 82 / 100
 
-            ## Merge Risk
-            One of: Low, Medium, High.
-            Explain briefly.
+            ## 理由
+            1-3 bullets only. Explain why this verdict was chosen.
 
-            ## Evidence Checked
-            Bullets listing concrete evidence, including evaluator result if available.
+            ## 人間が見るべき点
+            1-3 bullets only. Include only items that affect merge judgment.
 
-            ## Human Review Focus
-            Bullets telling the human exactly what to inspect before merging.
+            ## 検証結果
+            1-3 bullets only. Mention evaluator/build result if available.
 
-            ## Blocking Issues
-            Use "None found." if no blocking issue is found.
+            ## ブロッカー
+            Use "なし" if no blocking issue is found.
 
-            ## Non-Blocking Concerns
-            Use "None found." if no concern is found.
+            ## 軽微な懸念
+            Use "なし" if no concern is found.
 
             Rules:
-            - Be concrete and cite file paths.
+            - Output Japanese only.
+            - Keep the entire review under 35 lines.
+            - Put the merge decision first.
+            - Be concrete and cite file paths only when needed.
             - Do not invent test results.
-            - If evaluator output is missing, say so and increase merge risk.
-            - If build/evaluator failed or verdict.json approved is false, verdict must be Blocked.
+            - If evaluator output is missing, use 🟡 要確認 or 🔴 マージNG.
+            - If build/evaluator failed or verdict.json approved is false, verdict must be 🔴 マージNG and score must be below 50.
+            - If the only issues are minor visual or UX concerns, use 🟡 要確認.
+            - Use 🟢 マージOK only when there are no blocking issues and no important human judgment items.
             - Keep the review concise.
           claude_args: |
             --max-turns 12
@@ -158,9 +163,9 @@ jobs:
         run: |
           set -euo pipefail
           test -f .ai/review.md
-          grep -q '^# AI Review' .ai/review.md
-          grep -q '^## Verdict' .ai/review.md
-          grep -q '^## Human Review Focus' .ai/review.md
+          grep -q '^# AIレビュー' .ai/review.md
+          grep -q '^## 判定' .ai/review.md
+          grep -q '^## 人間が見るべき点' .ai/review.md
 
       - name: Comment review on pull request
         env:
@@ -183,17 +188,27 @@ jobs:
             exit 0
           fi
 
-          VERDICT="$(awk '/^## Verdict/{getline; while ($0 == "") getline; print; exit}' .ai/review.md)"
-          RISK="$(awk '/^## Merge Risk/{getline; while ($0 == "") getline; print; exit}' .ai/review.md)"
-          FOCUS="$(awk '/^## Human Review Focus/{flag=1; next} /^## /{flag=0} flag {print}' .ai/review.md | sed '/^[[:space:]]*$/d' | head -n 6)"
+          VERDICT="$(awk '/^## 判定/{getline; while ($0 == "") getline; print; exit}' .ai/review.md)"
+          SCORE="$(awk '/^## スコア/{getline; while ($0 == "") getline; print; exit}' .ai/review.md)"
+          CONCERNS="$(awk '/^## 人間が見るべき点/{flag=1; next} /^## /{flag=0} flag {print}' .ai/review.md | sed '/^[[:space:]]*$/d' | head -n 3)"
+
+          if printf '%s' "$VERDICT" | grep -q '🟢'; then
+            STATUS="PR成功 / マージOK"
+          elif printf '%s' "$VERDICT" | grep -q '🔴'; then
+            STATUS="PR成功 / マージNG"
+          else
+            STATUS="PR成功 / 要確認"
+          fi
 
           jq -n \
-            --arg title "AI Reviewer finished for PR #${PR_NUMBER}" \
+            --arg title "AIレビュー完了: PR #${PR_NUMBER}" \
+            --arg pr_number "$PR_NUMBER" \
             --arg pr_title "$PR_TITLE" \
             --arg pr_url "$PR_URL" \
-            --arg verdict "${VERDICT:-Unknown}" \
-            --arg risk "${RISK:-Unknown}" \
-            --arg focus "${FOCUS:-No focus items captured.}" \
+            --arg status "$STATUS" \
+            --arg verdict "${VERDICT:-要確認}" \
+            --arg score "${SCORE:-未採点}" \
+            --arg concerns "${CONCERNS:-大きな懸念なし}" \
             '{
               text: $title,
               blocks: [
@@ -201,21 +216,21 @@ jobs:
                   type: "section",
                   text: {
                     type: "mrkdwn",
-                    text: ("*AI Reviewer finished*\\n<" + $pr_url + "|PR #" + env.PR_NUMBER + ": " + $pr_title + ">")
+                    text: ("*AIレビュー完了*\\n<" + $pr_url + "|PR #" + $pr_number + ": " + $pr_title + ">")
                   }
                 },
                 {
                   type: "section",
                   fields: [
-                    { type: "mrkdwn", text: ("*Verdict*\\n" + $verdict) },
-                    { type: "mrkdwn", text: ("*Merge Risk*\\n" + $risk) }
+                    { type: "mrkdwn", text: ("*状態 / 判定*\\n" + $status + "\\n" + $verdict) },
+                    { type: "mrkdwn", text: ("*スコア*\\n" + $score) }
                   ]
                 },
                 {
                   type: "section",
                   text: {
                     type: "mrkdwn",
-                    text: ("*Human Review Focus*\\n" + $focus)
+                    text: ("*懸念点*\\n" + $concerns)
                   }
                 }
               ]
