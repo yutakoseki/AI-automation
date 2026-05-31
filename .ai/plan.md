@@ -1,71 +1,41 @@
-# 実装計画: TailwindCSS 導入によるモダン UI/UX への刷新
+# Implementation Plan: タスク追加モーダルのテキスト色・ボタン文言の修正
 
-## 概要
-Next.js (Pages Router) ベースの TODO アプリに TailwindCSS を導入し、既存の CSS Modules ベースのスタイルを Tailwind ユーティリティクラスに置き換えてモダンな UI/UX に刷新する。レスポンシブ対応とダークモード対応も同時に組み込む。
+## Summary
+The Add TODO modal (`components/AddTodoModal.tsx`) renders on a white background, but
+inputs, placeholders, and the heading rely on inherited/default colors that can render
+white-on-white. The fix adds explicit Tailwind text-color utilities so the heading,
+input text, and placeholders are readable, and translates the two action buttons to
+Japanese ("追加" / "キャンセル"). All changes are confined to a single component.
 
-## 現状把握
-- Next.js 14 (Pages Router) + React 18 + TypeScript の構成
-- スタイルは `styles/Home.module.css` と `styles/TodoItem.module.css` の CSS Modules のみ
-- `pages/_app.tsx` および `pages/_document.tsx` は未作成（グローバル CSS の取り込み口がない）
-- 主要画面: `pages/index.tsx`、`components/TodoItem.tsx`、`components/AddTodoModal.tsx`
+## Target file
+- `components/AddTodoModal.tsx` — the only file containing the modal markup.
 
-## 実装ステップ
+## Required changes
+1. **Heading color** — `<h2>` (line 29): keep `text-lg font-bold mb-4` and add
+   `text-gray-900` so the title remains readable against the white modal background.
+2. **Form control text + placeholder color** — for each of the three controls (title
+   `<input type="text">` at line 30, details `<textarea>` at line 37, deadline
+   `<input type="date">` at line 43): keep `w-full mb-2 p-2 border rounded` and add
+   `text-gray-900 placeholder-gray-500` so typed text is dark and placeholders are
+   visible gray, not white.
+3. **Button labels** — change visible text of the first button (line 50–52) from `Add`
+   to `追加` and the second button (line 53–55) from `Close` to `キャンセル`. Do not
+   touch onClick handlers, className values, or layout.
 
-### 1. 依存関係の追加 (`package.json`)
-- `devDependencies` に `tailwindcss`、`postcss`、`autoprefixer` を追加。
+## Out of scope
+- Translating the modal heading "Add New TODO" (issue does not request this).
+- Refactoring validation, layout, accessibility, or modal a11y attributes.
+- Edits to `styles/globals.css`, `tailwind.config.js`, or any other component/page.
 
-### 2. Tailwind / PostCSS 設定ファイルの新規作成
-- `tailwind.config.js`
-  - `content`: `./pages/**/*.{js,ts,jsx,tsx}`、`./components/**/*.{js,ts,jsx,tsx}`
-  - `darkMode: 'media'`（OS 設定追従。ダークモード対応の最小実装）
-  - `theme.extend` でフォントやカラーパレットを軽く拡張（オプション）
-- `postcss.config.js`
-  - `tailwindcss` と `autoprefixer` を読み込む
+## Verification
+- `npm install && npm run build` succeeds.
+- Manual: open the Add TODO modal, type into each field, and confirm:
+  - The heading and typed text are dark/readable on white.
+  - Placeholders are visible gray.
+  - The action buttons read `追加` and `キャンセル` and still work.
 
-### 3. グローバル CSS の追加
-- `styles/globals.css` を新規作成し、`@tailwind base; @tailwind components; @tailwind utilities;` を記述。
-- 必要に応じて `body` / `html` の基本スタイル（背景色・テキストカラー・ダーク時の色）を `@layer base` で定義。
-
-### 4. `pages/_app.tsx` の新規作成
-- `globals.css` をインポートして全ページに適用する。
-
-### 5. 各コンポーネントを Tailwind ユーティリティへ置き換え
-- `pages/index.tsx`
-  - CSS Modules インポートを削除し、`className` を Tailwind クラスへ置換。
-  - カード状コンテナ、見出しタイポグラフィ、CTA ボタン、サマリーチップなどモダン UI へ。
-  - レスポンシブ: `sm:`、`md:` を活用したパディング・幅調整。
-  - ダーク: `dark:` プレフィックスで背景/文字色を切り替え。
-- `components/TodoItem.tsx`
-  - リストアイテムをカード調にし、チェックボックス・テキスト・編集 UI を縦横整理。
-  - 完了時は `line-through` ＋ 不透明度を下げる。
-  - ボタンは色とサイズで役割を区別（編集/保存/削除）。
-- `components/AddTodoModal.tsx`
-  - 背景オーバーレイ、中央寄せモーダル、フォーカスリング、フォーム間隔を Tailwind で再構築。
-
-### 6. 旧 CSS Modules の削除
-- `styles/Home.module.css` と `styles/TodoItem.module.css` を削除。
-- いずれの参照も Tailwind 置換後に残らないことを `grep` で確認してから削除する。
-
-### 7. 動作確認
-- `npm install` で依存追加を反映。
-- `npm run build` でビルドエラーがないことを確認。
-- `npm run dev` でデスクトップ/モバイル幅・ライト/ダークの両方で見た目を確認（手動）。
-
-## レスポンシブ / ダークモード方針
-- レイアウトは `max-w-2xl mx-auto px-4 sm:px-6 lg:px-8` 等で中央寄せ＆段階的余白。
-- カラーは `bg-white text-gray-900 dark:bg-gray-900 dark:text-gray-100` を基準パレットに。
-- ボタンは `focus-visible:ring-2` でアクセシビリティ配慮。
-
-## スコープ外（out_of_scope）
-- ローカルストレージ永続化やバックエンド連携。
-- ユーザー切り替え式（class 戦略）のダークモードトグル UI（今回は OS 追従の `media` 戦略で最小実装）。
-- 既存ロジック（追加・編集・削除・完了トグル・「すべて完了」）の挙動変更。
-- アニメーションライブラリ導入や複雑なトランジション。
-
-## リスク
-- `_app.tsx` 未作成のため、グローバル CSS 取り込み口の新設が必要。新規作成時の React/Next 型に注意。
-- Tailwind 置換時に CSS Modules への参照が残ると未使用クラス警告や見た目崩れが起きる可能性 → 一括 grep で確認。
-- Tailwind v3 系の `content` 設定が正しくないと本番ビルドでクラスがパージされる。
+## Risks
+- Low. Pure className/text changes in one file; no logic, types, or props change.
 
 ## Generator constraints
 - Implement the plan autonomously without asking for human clarification.

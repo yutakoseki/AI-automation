@@ -1,10 +1,1 @@
-package.json
-tailwind.config.js
-postcss.config.js
-styles/globals.css
-pages/_app.tsx
-pages/index.tsx
-components/TodoItem.tsx
 components/AddTodoModal.tsx
-styles/Home.module.css
-styles/TodoItem.module.css
