@@ -36,8 +36,15 @@ jobs:
             - Identify the files that most likely need changes.
             - Produce an implementation plan for a separate coding agent.
 
+            Execution budget:
+            - Finish in at most 6 tool calls.
+            - First inspect only the repository root, package.json, pages/, components/, styles/, and existing Tailwind/PostCSS config files if present.
+            - Do not inspect lockfiles, node_modules, .next, build output, or generated files.
+            - Do not attempt exhaustive design analysis.
+            - Write the required .ai files as soon as you have enough context for a safe first pull request.
+
             Planning style:
-            - Do not over-analyze. You have a hard limit of 10 turns.
+            - Do not over-analyze. You have a hard limit of 20 turns, but should finish much earlier.
             - You must create the required .ai files within the turn limit.
             - Do not wait for human clarification. This pipeline must proceed autonomously.
             - If the issue is broad or ambiguous, choose the smallest safe implementation slice that can produce a useful pull request.
@@ -138,7 +145,9 @@ jobs:
             Latest clarification comment, if this run was triggered by an issue comment:
             ${{ github.event.comment.body }}
           claude_args: |
-            --max-turns 10
+            --max-turns 20
+            --allowedTools "Read,Glob,Grep,LS,Write,Edit"
+            --disallowedTools "Bash,WebFetch,WebSearch"
 
       - name: Validate planner output
         id: validate
