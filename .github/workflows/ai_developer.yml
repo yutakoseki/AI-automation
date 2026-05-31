@@ -11,6 +11,7 @@ permissions:
 
 jobs:
   implement:
+    # 'ai-ready'ラベルが貼られたときのみ実行
     if: github.event.label.name == 'ai-ready'
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -40,47 +41,43 @@ jobs:
           BRANCH_NAME="ai-feature/issue-${{ github.event.issue.number }}"
           git checkout -b $BRANCH_NAME
 
-          # 【最重要改善】長文やエラーログを安全に一時ファイルへ書き出す（ヒアドキュメントの保護）
+          # Issueの内容をファイルに書き出し、Aiderに渡す（文字化け・改行エラー対策）
           cat << 'EOF' > issue_prompt.txt
           Issueタイトル: ${{ github.event.issue.title }}
-          Issue本文:
+          Issue詳細:
           ${{ github.event.issue.body }}
           EOF
 
-          # Aiderにはファイル経由で指示を出すことで、シェルの構文エラーを100%回避
           aider --message-file issue_prompt.txt --yes --no-auto-commits
 
-          # 認証URLの設定
+          # 認証URLをあなたのPATで上書き（PR連鎖起動の鍵）
           git remote set-url origin "https://x-access-token:${{ secrets.AI_PAT }}@github.com/${{ github.repository }}.git"
 
-          # 未コミットの変更があればすべてステージング
+          # 変更をステージング
           git add .
 
-          # mainブランチとの間にコードの差分があるかをチェック
+          # 差分があるか確認
           if [ -n "$(git status --porcelain)" ] || [ -n "$(git diff origin/main HEAD)" ]; then
             
+            # コミット実行
             if [ -n "$(git status --porcelain)" ]; then
               git commit -m "feat: implemented by AI for Issue #${{ github.event.issue.number }}"
             fi
             
+            # 強制プッシュ
             git push -f origin $BRANCH_NAME
             
-            AI_SUMMARY=$(git log -1 --pretty=%B)
-            
-            # プルリクエストを作成
+            # PR作成（AI_PATをトークンとして使用）
             export GH_TOKEN="${{ secrets.AI_PAT }}"
             gh pr create --title "[AI] ${{ github.event.issue.title }}" --body "
             ## 🎯 課題の概要
             Closes #${{ github.event.issue.number }}
-            Issue 「${{ github.event.issue.title }}」の要望に基づき、AIが自律開発を行いました。
+            Issueに基づき、AIが自律開発を行いました。
             
-            ## 🛠️ 今回の具体的な修正点
-            $AI_SUMMARY
-            
-            ## ⚠️ レビュアー（人間）への注意点・確認方法
-            - AIが自動生成したコードです。意図通りのロジックやデザインになっているか、画面上の「Files changed」タブで最終確認をお願いします。
-            " --base main --head $BRANCH_NAME || echo "PR is already created or updated."
+            ## ⚠️ レビュアーへの確認点
+            - AI生成コードです。ロジックの意図が正しいか確認してください。
+            " --base main --head $BRANCH_NAME || echo "PR already exists."
           else
-            echo "リポジトリ内に差分が全く検出されなかったため、PR作成をスキップします。"
+            echo "差分なし。処理を終了します。"
             exit 0
           fi
