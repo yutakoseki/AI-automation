@@ -1,62 +1,77 @@
-# 実装計画: タスク編集画面のモーダル化と可読性改善
+# Implementation Plan — タスク追加・編集モーダルのデザイン統一＆ダーク化
 
-## Issue 概要
-タスク編集が現状 `components/TodoItem.tsx` 内のインライン編集で実装されているが:
-- フォーム入力に `text-*` が指定されておらず、白背景に白文字となり可読性がない
-- `flex` 内に input/textarea/date を並べているためレイアウトが崩れる
-- 追加 (`AddTodoModal`) はモーダル化済みなのに編集だけインライン
+## Context
 
-要件:
-- 編集もモーダル化する (インライン編集を廃止)
-- テキスト色・プレースホルダ色を背景とコントラストのあるものにする
-- レイアウト崩れを直す
-- ボタン/フォームを追加時 (`AddTodoModal`) と同等の UI 指針に揃える
+The app uses Tailwind with `darkMode: 'media'` (see `tailwind.config.js`).
+`styles/globals.css` and `pages/index.tsx` already use `dark:` variants (e.g. `bg-white dark:bg-gray-900`, `text-gray-900 dark:text-gray-100`, `bg-gray-100 dark:bg-gray-800`).
 
-## アプローチ
-最小・安全な変更で `AddTodoModal` のパターンをそのまま編集にも適用する。
+The two modal components, however, are hardcoded to light styles only:
 
-### 1. 新規ファイル `components/EditTodoModal.tsx` を作成
-`AddTodoModal.tsx` を雛形に、初期値として既存 todo の `title`/`details`/`deadline` を受け取り編集可能にする。
+- `components/AddTodoModal.tsx`
+- `components/EditTodoModal.tsx`
 
-- Props: `{ todo: Todo; onSave: (title: string, details: string, deadline: string) => void; onClose: () => void }`
-- 入力フィールドは追加モーダルと同一スタイル (`text-gray-900 placeholder-gray-500`)
-- 見出し: 「TODO を編集」
-- ボタン: 「保存」(blue) / 「キャンセル」(gray)
-- 日本語ラベル/プレースホルダ (タイトル/詳細/期限) を追加モーダルと統一
-- オーバーレイ構造 (`fixed inset-0 bg-gray-600 bg-opacity-50 ...`) も AddTodoModal と同一
+Both use:
+- container: `bg-white` (no dark variant)
+- heading: `text-gray-900` only
+- inputs/textarea/date: `border rounded text-gray-900 placeholder-gray-500` (no dark bg/border)
+- overlay: `bg-gray-600 bg-opacity-50` (acceptable, but can be tuned for dark)
 
-### 2. `components/TodoItem.tsx` をモーダル方式に変更
-- インライン編集の input/textarea/date ブロック (44–66 行付近) を削除
-- 「保存」ボタンの分岐を削除し、「編集」ボタンを常時表示
-- 「編集」ボタン押下で `EditTodoModal` を開くよう state を管理
-- 不要になった `editTitle` / `editDetails` / `editDeadline` のローカル state を削除 (モーダル側で保持)
-- 削除ボタンの挙動・aria-label は現状維持
+This produces the bright/white modal background the issue describes, visually inconsistent with the surrounding dark UI.
 
-### 3. (変更なし) `pages/index.tsx`
-`handleEdit(id, title, details, deadline)` のシグネチャは変えないので `pages/index.tsx` の変更は不要。
+## Goal
 
-## 受け入れ条件
-- 「編集」を押すと追加時と同じ見た目のモーダルが開く
-- 既存の `title` / `details` / `deadline` がフォームに初期表示される
-- 「保存」で値が反映され、モーダルが閉じる
-- 「キャンセル」で変更を破棄してモーダルが閉じる
-- フォームのテキストとプレースホルダが背景とコントラストある色で表示される
-- TodoItem の行レイアウトが崩れない (チェックボックス + 内容 + 編集/削除ボタン)
+Make both modals visually consistent with the rest of the app in both light and dark color schemes (`prefers-color-scheme: dark`), without changing component APIs or behavior. Also apply small responsive & accessibility tweaks.
 
-## スコープ外
-- 入力バリデーション強化やエラーメッセージ表示
-- ESC キー / 外側クリックでのモーダル閉鎖
-- `AddTodoModal` と `EditTodoModal` の共通化リファクタ
-- ダークモード配色の全面的見直し
+## Approach (smallest safe slice)
 
-## リスク
-- 既存テストが TodoItem のインライン編集 DOM 構造に依存していれば失敗する可能性 (現時点で `__tests__` は未確認)
-- `AddTodoModal` は外側クリック非対応のため `EditTodoModal` も同様だが、後続で UX 指摘が来る可能性
+Update Tailwind classes in the two modal components to add `dark:` variants matching the gray-800/gray-900/gray-700/gray-100 tones already used in `pages/index.tsx`. Light-mode classes remain so non-dark users are unaffected.
 
-## 生成側へのガイド
-- 自律的に実装し、人間の確認を待たない
-- 計画が広い場合は本ドキュメントの最小スライスを実装する
-- 関係ない箇所のリファクタや大規模書き換えは行わない
+### Concrete class changes (apply to BOTH AddTodoModal and EditTodoModal)
+
+1. **Overlay**
+   - From: `fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full`
+   - To:   `fixed inset-0 bg-gray-600 bg-opacity-50 dark:bg-black dark:bg-opacity-60 overflow-y-auto h-full w-full`
+
+2. **Modal panel (card)**
+   - From: `relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white`
+   - To:   `relative top-20 mx-auto p-5 border border-gray-200 dark:border-gray-700 w-full max-w-md mx-4 shadow-lg rounded-md bg-white dark:bg-gray-900`
+   - Add attributes: `role="dialog"` and `aria-modal="true"`.
+
+3. **Heading**
+   - From: `text-lg font-bold mb-4 text-gray-900`
+   - To:   `text-lg font-bold mb-4 text-gray-900 dark:text-gray-100`
+
+4. **Inputs / textarea / date (all three)**
+   - From: `w-full mb-2 p-2 border rounded text-gray-900 placeholder-gray-500`
+   - To:   `w-full mb-2 p-2 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500`
+
+5. **Buttons** — existing blue/gray buttons work in both modes; add focus ring for accessibility:
+   - Append `focus:outline-none focus:ring-2 focus:ring-blue-400` to both primary and secondary buttons.
+
+### What does NOT change
+
+- Component props, exports, state, validation logic, button text, or the order of fields.
+- `pages/index.tsx`, `TodoItem.tsx`, `tailwind.config.js`, `styles/globals.css`.
+
+## Out of scope
+
+- Extracting a shared `<Modal />` component.
+- Focus trap / Esc-to-close / click-outside-to-close behavior.
+- Switching `darkMode` from `media` to `class`, or adding a manual theme toggle.
+- Restyling other components (`TodoItem`, `Home`, etc.).
+- Automated visual / e2e tests.
+
+## Risks
+
+- `darkMode: 'media'` means reviewers without OS-level dark mode will not see the dark variant without toggling system theme. Mitigation: call this out in the PR description.
+- Native `<input type="date">` calendar picker chrome is browser-controlled and may still appear light on some browsers; styling is best-effort.
+- Tailwind purge already scans `components/**`, so newly added `dark:` classes are picked up automatically — no config change required.
+
+## Verification
+
+- `npm install`
+- `npm run build` (Next.js build + type-check) must pass.
+- Manual smoke: open Add and Edit modals under `prefers-color-scheme: dark`; backgrounds, borders, text, and placeholders should be dark and readable. Under light mode, behavior matches today.
 
 ## Generator constraints
 - Implement the plan autonomously without asking for human clarification.

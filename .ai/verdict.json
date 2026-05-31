@@ -1,8 +1,25 @@
 {
   "approved": true,
-  "reason": "Implementation produced a diff and npm run build passed after automatic repair.",
+  "reason": "Implementation produced a diff and npm run build passed.",
+  "metrics": {
+    "changed_file_count": 2,
+    "target_match_count": 2,
+    "unplanned_file_count": 0,
+    "repair_attempts": 0
+  },
+  "checks": {
+    "generated_diff": true,
+    "touched_planner_target": true,
+    "build_passed": true
+  },
   "changed_files": [
-    "components/TodoItem.tsx"
+    "components/AddTodoModal.tsx",
+    "components/EditTodoModal.tsx"
   ],
+  "matched_target_files": [
+    "components/AddTodoModal.tsx",
+    "components/EditTodoModal.tsx"
+  ],
+  "unplanned_files": [],
   "blocking_issues": []
 }

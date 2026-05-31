@@ -1,36 +1,34 @@
 {
-  "issue_number": 27,
-  "summary": "タスク編集をAddTodoModalと同等のモーダルUIに置き換え、TodoItemのインライン編集による白背景白文字とレイアウト崩れを解消する。新規にcomponents/EditTodoModal.tsxを作成し、components/TodoItem.tsxからインライン編集UIを削除してモーダル起動方式に変更する。pages/index.tsxのhandleEditシグネチャは維持するため変更しない。",
+  "issue_number": 29,
+  "summary": "Add Tailwind dark: variants to AddTodoModal and EditTodoModal so the modal overlay, panel, heading, inputs, textarea, and date field match the app's existing dark-mode styling (darkMode: 'media' is already configured and used in pages/index.tsx and styles/globals.css). Also apply small responsive (w-full max-w-md mx-4) and accessibility (role=dialog, aria-modal, focus rings) tweaks. No API or behavior changes.",
   "confidence": "high",
   "target_files": [
-    "components/EditTodoModal.tsx",
-    "components/TodoItem.tsx"
+    "components/AddTodoModal.tsx",
+    "components/EditTodoModal.tsx"
   ],
   "required_changes": [
     {
-      "file": "components/EditTodoModal.tsx",
-      "change": "新規作成。AddTodoModal.tsxを雛形に、props { todo: Todo; onSave: (title: string, details: string, deadline: string) => void; onClose: () => void } を受け取る編集モーダルを実装する。useStateの初期値はprops.todoの値を使う。入力(input/textarea/date)はAddTodoModalと同一クラス(text-gray-900 placeholder-gray-500を含む)にする。オーバーレイ構造もAddTodoModalと同一(fixed inset-0 bg-gray-600 bg-opacity-50 ...)。見出しは『TODO を編集』、プライマリボタンは『保存』(bg-blue-500)、セカンダリは『キャンセル』(bg-gray-500)。Todo型は types/todo からインポートする。",
-      "reason": "編集もモーダル化し、追加時と同等のUIクオリティ・可読性を提供するため。",
+      "file": "components/AddTodoModal.tsx",
+      "change": "Update Tailwind classes only. Overlay: append 'dark:bg-black dark:bg-opacity-60'. Modal panel: replace 'border w-96 ... bg-white' with 'border border-gray-200 dark:border-gray-700 w-full max-w-md mx-4 shadow-lg rounded-md bg-white dark:bg-gray-900' and add attributes role=\"dialog\" aria-modal=\"true\". Heading: append 'dark:text-gray-100'. Each input/textarea/date: replace 'border rounded text-gray-900 placeholder-gray-500' with 'border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500'. Buttons: append 'focus:outline-none focus:ring-2 focus:ring-blue-400'. Do not modify component props, state, validation, button labels, or onAdd/onClose behavior.",
+      "reason": "The current modal is hardcoded to bg-white with light text, ignoring the app-wide dark-mode tokens already used in pages/index.tsx and styles/globals.css. This produces the bright/white background described in the issue.",
       "acceptance_criteria": [
-        "components/EditTodoModal.tsx が新規作成されている",
-        "propsはtodo, onSave, onCloseの3つを受け取る",
-        "title/details/deadlineの初期値がprops.todoから設定される",
-        "全フォーム入力に text-gray-900 と placeholder-gray-500 が指定されている",
-        "保存ボタン押下でonSave(title, details, deadline)が呼ばれ、続けてonClose()される",
-        "キャンセルボタン押下で変更を反映せずonClose()される",
-        "オーバーレイとカードの構造がAddTodoModalと視覚的に統一されている"
+        "Under prefers-color-scheme: dark, the modal panel renders with bg-gray-900 and gray-100 text.",
+        "Under light mode, the modal renders white background with dark text (no visual regression).",
+        "Inputs, textarea, and date field have dark backgrounds (gray-800) and readable placeholder text (gray-400) in dark mode.",
+        "Modal panel has role=\"dialog\" and aria-modal=\"true\".",
+        "Modal panel uses 'w-full max-w-md mx-4' and does not overflow on viewports narrower than ~430px.",
+        "Component props, exported function signature, and onAdd/onClose behavior are unchanged."
       ]
     },
     {
-      "file": "components/TodoItem.tsx",
-      "change": "インライン編集ブロック(input/textarea/[type=date]の3要素 と『保存』ボタン分岐)を削除する。代わりにisEditing(またはisEditOpen)stateで EditTodoModal の表示を制御し、『編集』ボタン押下でモーダルを開く。EditTodoModalのonSaveでは既存のprops.onEdit(todo.id, title, details, deadline)を呼ぶ。不要になったeditTitle/editDetails/editDeadlineのローカルstateは削除する。削除ボタンの挙動・aria-labelは現状維持。",
-      "reason": "インライン編集による白背景白文字・レイアウト崩れを解消し、編集導線を追加と同じモーダルに統一するため。",
+      "file": "components/EditTodoModal.tsx",
+      "change": "Apply the same class changes as AddTodoModal so Add and Edit are visually identical: dark: variants on overlay, panel, heading, and each input/textarea/date; responsive width 'w-full max-w-md mx-4'; focus rings; role=\"dialog\" and aria-modal=\"true\". Do not modify props (todo, onSave, onClose), state initialization from todo, validation logic, or button labels.",
+      "reason": "EditTodoModal duplicates AddTodoModal's light-only styling and must be updated in lockstep so the add and edit experiences look identical.",
       "acceptance_criteria": [
-        "TodoItem内にinput/textarea/[type=date]のインライン編集要素が存在しない",
-        "『編集』ボタンが常時表示され、押下でEditTodoModalがマウントされる",
-        "EditTodoModalのonSaveで既存のprops.onEdit(id, title, details, deadline)が呼ばれる",
-        "TodoItemのli行レイアウト(チェックボックス・テキスト・編集/削除ボタン)が崩れない",
-        "削除ボタンの挙動・aria-labelは現状維持"
+        "Edit modal matches Add modal in colors, borders, focus styles, and spacing in both light and dark mode.",
+        "Existing onSave/onClose behavior and form validation are unchanged.",
+        "Modal panel has role=\"dialog\" and aria-modal=\"true\".",
+        "Initial values for title/details/deadline still come from props.todo."
       ]
     }
   ],
@@ -39,17 +37,19 @@
     "npm run build"
   ],
   "out_of_scope": [
-    "ESC/外側クリックでのモーダル閉鎖",
-    "入力バリデーションの強化やエラーメッセージ表示",
-    "AddTodoModalとEditTodoModalの共通化リファクタ",
-    "ダークモード配色の全面的見直し",
-    "pages/index.tsxのhandleEditシグネチャ変更"
+    "Extracting a shared <Modal /> component between AddTodoModal and EditTodoModal.",
+    "Implementing focus trap, Esc-to-close, or click-outside-to-close.",
+    "Switching tailwind darkMode from 'media' to 'class' or adding a manual theme toggle.",
+    "Restyling TodoItem, pages/index.tsx, or other unrelated components.",
+    "Adding automated visual or e2e tests.",
+    "Changing component APIs or button labels."
   ],
   "risks": [
-    "既存テストがTodoItem内のインライン編集DOM構造に依存していれば失敗する可能性(現時点で__tests__は未確認)",
-    "AddTodoModalは外側クリック非対応のためEditTodoModalも同様だが、後続でUX指摘が来る可能性"
+    "darkMode is 'media', so reviewers without OS-level dark mode will not see the dark variant without toggling system theme or temporarily flipping tailwind.config.js to 'class'.",
+    "Native <input type=\"date\"> calendar picker chrome is browser-controlled and may still appear light on some browsers; styling is best-effort.",
+    "Tailwind already scans components/**, so new dark: classes will be picked up without config changes."
   ],
   "open_questions": [
-    "編集モーダルの見出し文言は『TODO を編集』で進めるが、『タスクを編集』が望ましい場合は後続で変更する"
+    "Should darkMode be switched from 'media' to 'class' with a user-facing toggle? Deferred — out of scope for this slice."
   ]
 }
