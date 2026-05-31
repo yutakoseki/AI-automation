@@ -96,6 +96,56 @@ jobs:
             exit 1
           fi
 
+          # Evaluator: PR作成前に機械的な検証を行う
+          EVALUATION_STATUS="approved"
+          EVALUATION_REASON="Implementation produced a diff and npm run build passed."
+          {
+            echo "# AI Evaluation"
+            echo
+            echo "## Checks"
+            echo "- Generated diff exists: passed"
+          } > .ai/evaluation.md
+
+          if git diff --name-only -- ':!.ai' | grep -qx 'package.json'; then
+            echo "- npm install: running because package.json changed" >> .ai/evaluation.md
+            if npm install; then
+              echo "- npm install: passed" >> .ai/evaluation.md
+            else
+              EVALUATION_STATUS="rejected"
+              EVALUATION_REASON="npm install failed after package.json changed."
+              echo "- npm install: failed" >> .ai/evaluation.md
+            fi
+          else
+            echo "- npm install: skipped because package.json did not change" >> .ai/evaluation.md
+          fi
+
+          if [ "$EVALUATION_STATUS" = "approved" ] && npm run build; then
+            echo "- npm run build: passed" >> .ai/evaluation.md
+          elif [ "$EVALUATION_STATUS" != "approved" ]; then
+            echo "- npm run build: skipped because an earlier evaluator check failed" >> .ai/evaluation.md
+          else
+            EVALUATION_STATUS="rejected"
+            EVALUATION_REASON="npm run build failed after generation."
+            echo "- npm run build: failed" >> .ai/evaluation.md
+          fi
+
+          jq -n \
+            --argjson approved "$([ "$EVALUATION_STATUS" = "approved" ] && echo true || echo false)" \
+            --arg reason "$EVALUATION_REASON" \
+            --arg generated_diff "$(git diff --name-only -- ':!.ai' | tr '\n' ' ')" \
+            '{
+              approved: $approved,
+              reason: $reason,
+              changed_files: ($generated_diff | split(" ") | map(select(length > 0))),
+              blocking_issues: (if $approved then [] else [$reason] end)
+            }' > .ai/verdict.json
+
+          if [ "$EVALUATION_STATUS" != "approved" ]; then
+            gh issue comment "$ISSUE_NUMBER" --body-file .ai/evaluation.md
+            echo "$EVALUATION_REASON"
+            exit 1
+          fi
+
           # GITHUB_TOKENでブランチをpushする
           git remote set-url origin "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
 
@@ -119,6 +169,10 @@ jobs:
           - .ai/plan.json
           - .ai/target-files.txt
 
+          ## Evaluator output
+          - .ai/evaluation.md
+          - .ai/verdict.json
+
           ## 注意事項
-          - AI生成コードです。PR Reviewerエージェントがこの後自動起動します。
+          - AI生成コードです。Evaluator を通過した場合のみPR化されています。
           " --base main --head "$BRANCH_NAME"
