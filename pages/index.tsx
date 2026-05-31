@@ -1,5 +1,4 @@
 import { FormEvent, useState, useEffect } from "react";
-import styles from "../styles/Home.module.css";
 import { format } from "date-fns";
 import Head from "next/head";
 import TodoItem from "@/components/TodoItem";
@@ -83,16 +82,15 @@ export default function Home() {
         <meta name="description" content="シンプルな TODO アプリ（テスト用）" />
       </Head>
 
-      <main className={styles.main}>
-        <div className={styles.container}>
-          <div className={styles.dateTime}>
+      <main className="min-h-screen flex justify-center p-8 bg-gray-100 dark:bg-gray-800">
+        <div className="w-full max-w-2xl bg-white dark:bg-gray-900 rounded-lg shadow-lg p-6">
+          <div className="text-center text-gray-600 dark:text-gray-400 mb-4">
             {currentDateTime}
           </div>
-          <h1 className={styles.title}>TODO App</h1>
-          <p className={styles.subtitle}>テスト・実験用の最小構成サンプル</p>
+          <h1 className="text-3xl font-bold text-center text-gray-800 dark:text-gray-100 mb-2">TODO App</h1>
+          <p className="text-center text-gray-500 dark:text-gray-300 mb-6">テスト・実験用の最小構成サンプル</p>
 
-          {/* 追加ボタン */}
-          <button onClick={() => setIsModalOpen(true)} className={styles.addButton}>
+          <button onClick={() => setIsModalOpen(true)} className="w-full bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded mb-4">
             追加
           </button>
 
@@ -103,19 +101,17 @@ export default function Home() {
             />
           )}
 
-          {/* 一括完了ボタン */}
-          <button onClick={handleMarkAllComplete} className={styles.completeAllButton}>
+          <button onClick={handleMarkAllComplete} className="w-full bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded mb-4">
             すべて完了
           </button>
-          <p className={styles.summary}>
+          <p className="text-center text-gray-600 dark:text-gray-400 mb-4">
             未完了: {remainingCount} / 全 {todos.length} 件
           </p>
 
-          {/* TODO 一覧 */}
           {todos.length === 0 ? (
-            <p className={styles.empty}>TODO がありません。上から追加してください。</p>
+            <p className="text-center text-gray-500 dark:text-gray-300 py-4">TODO がありません。上から追加してください。</p>
           ) : (
-            <ul className={styles.list}>
+            <ul className="space-y-4">
               {todos.map((todo) => (
                 <TodoItem
                   key={todo.id}
