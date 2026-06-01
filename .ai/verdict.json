@@ -1,24 +1,100 @@
 {
   "approved": true,
-  "reason": "Implementation produced a diff and npm run build passed.",
+  "reason": "Generator produced buildable code and evaluator checks passed.",
   "metrics": {
-    "changed_file_count": 2,
-    "target_match_count": 2,
+    "changed_file_count": 5,
+    "target_match_count": 5,
     "unplanned_file_count": 0,
-    "repair_attempts": 0
+    "repair_attempts": 3,
+    "evaluator_fix_attempts": 0
   },
   "checks": {
     "generated_diff": true,
     "touched_planner_target": true,
     "build_passed": true
   },
+  "test_results": {
+    "required": [
+      {
+        "id": "REQ-1",
+        "description": "types/todo.ts の Todo 型に tags: string[] フィールドが存在する。",
+        "verification_method": "static",
+        "acceptance": "types/todo.ts に `tags` プロパティが宣言されており、要素型が string の配列であること。",
+        "status": "passed"
+      },
+      {
+        "id": "REQ-2",
+        "description": "AddTodoModal にタグ入力欄が追加され、カンマ区切り文字列が string[] にパースされて onAdd に渡される。",
+        "verification_method": "diff",
+        "acceptance": "AddTodoModal.tsx で tags 用 input が存在し、`,` で split → trim → 空除去 のロジックが含まれ、onAdd の引数として tags 配列が渡されること。",
+        "status": "passed"
+      },
+      {
+        "id": "REQ-3",
+        "description": "EditTodoModal で既存タグを編集でき、保存時にタグ配列で onSave に渡される。",
+        "verification_method": "diff",
+        "acceptance": "EditTodoModal.tsx でタグ用 input の初期値が `todo.tags?.join(', ') ?? ''`、保存時に同様のパースで配列化し onSave に渡すこと。",
+        "status": "passed"
+      },
+      {
+        "id": "REQ-4",
+        "description": "TodoItem でタグがバッジ/ラベルとして表示される。",
+        "verification_method": "diff",
+        "acceptance": "TodoItem.tsx で todo.tags を map し、Tailwind でバッジ風スタイルを当てた要素を描画していること。",
+        "status": "passed"
+      },
+      {
+        "id": "REQ-5",
+        "description": "TypeScript ビルドが成功する（型エラーが出ない）。",
+        "verification_method": "build",
+        "acceptance": "`npx next build` 相当が型エラー無しで完了すること（ローカル/CI）。",
+        "status": "passed"
+      }
+    ],
+    "optional": [
+      {
+        "id": "OPT-1",
+        "description": "タグの重複入力をユニーク化する。",
+        "verification_method": "static",
+        "acceptance": "Add/Edit モーダルのパース処理に重複排除（Set 等）が含まれる。",
+        "status": "optional"
+      },
+      {
+        "id": "OPT-2",
+        "description": "将来のタグ色分け/フィルタ拡張を想定した構造（独立した badge レンダリングや data-tag 属性など）。",
+        "verification_method": "reviewer",
+        "acceptance": "タグレンダリング部分が再利用しやすい形（mapで個別要素、固有 className または data 属性付き）になっていること。",
+        "status": "optional"
+      },
+      {
+        "id": "OPT-3",
+        "description": "タグ入力欄に例示プレースホルダ `家事, 買い物, 優先` を入れる。",
+        "verification_method": "diff",
+        "acceptance": "Add/Edit モーダルのタグ input に該当 placeholder が指定されている。",
+        "status": "optional"
+      },
+      {
+        "id": "OPT-4",
+        "description": "タグ入力欄に aria-label を付与しアクセシビリティを担保する。",
+        "verification_method": "diff",
+        "acceptance": "タグ input に aria-label が指定されている。",
+        "status": "optional"
+      }
+    ]
+  },
   "changed_files": [
     "components/AddTodoModal.tsx",
-    "components/EditTodoModal.tsx"
+    "components/EditTodoModal.tsx",
+    "components/TodoItem.tsx",
+    "pages/index.tsx",
+    "types/todo.ts"
   ],
   "matched_target_files": [
     "components/AddTodoModal.tsx",
-    "components/EditTodoModal.tsx"
+    "components/EditTodoModal.tsx",
+    "components/TodoItem.tsx",
+    "pages/index.tsx",
+    "types/todo.ts"
   ],
   "unplanned_files": [],
   "blocking_issues": []

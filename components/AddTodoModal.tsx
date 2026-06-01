@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 type AddTodoModalProps = {
-  onAdd: (title: string, details: string, deadline: string) => void;
+  onAdd: (title: string, details: string, deadline: string, tags: string[]) => void;
   onClose: () => void;
 };
 
@@ -10,13 +10,17 @@ export default function AddTodoModal({ onAdd, onClose }: AddTodoModalProps) {
   const [details, setDetails] = useState("");
   const [deadline, setDeadline] = useState("");
 
+  const [tags, setTags] = useState("");
+
   const handleAdd = () => {
+    const trimmedTags = tags.split(',').map(tag => tag.trim()).filter(Boolean);
+    const uniqueTags = Array.from(new Set(trimmedTags));
     const trimmedTitle = title.trim();
     const trimmedDetails = details.trim();
     const trimmedDeadline = deadline.trim();
     if (!trimmedTitle || !trimmedDetails || !trimmedDeadline) return;
 
-    onAdd(trimmedTitle, trimmedDetails, trimmedDeadline);
+    onAdd(trimmedTitle, trimmedDetails, trimmedDeadline, uniqueTags);
     setTitle("");
     setDetails("");
     setDeadline("");
@@ -46,14 +50,20 @@ export default function AddTodoModal({ onAdd, onClose }: AddTodoModalProps) {
           onChange={(e) => setDeadline(e.target.value)}
           className="w-full mb-2 p-2 border rounded text-gray-900 placeholder-gray-500"
         />
-        <div className="flex justify-end space-x-2">
-          <button onClick={handleAdd} className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-1 px-2 rounded focus:outline-none focus:ring-2 focus:ring-blue-400">
-            追加
-          </button>
-          <button onClick={onClose} className="bg-gray-500 hover:bg-gray-600 dark:bg-gray-700 dark:hover:bg-gray-600 text-white font-bold py-1 px-2 rounded focus:outline-none focus:ring-2 focus:ring-gray-400">
-            キャンセル
-          </button>
-        </div>
+        <input
+          type="text"
+          value={tags}
+          onChange={(e) => setTags(e.target.value)}
+          placeholder="家事, 買い物, 優先"
+          aria-label="タグをカンマ区切りで入力"
+          className="w-full mb-2 p-2 border border-gray-300 dark:border-gray-600 rounded text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+        />
+        <button onClick={handleAdd} className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-1 px-2 rounded focus:outline-none focus:ring-2 focus:ring-blue-400">
+          追加
+        </button>
+        <button onClick={onClose} className="bg-gray-500 hover:bg-gray-600 dark:bg-gray-700 dark:hover:bg-gray-600 text-white font-bold py-1 px-2 rounded focus:outline-none focus:ring-2 focus:ring-gray-400">
+          キャンセル
+        </button>
       </div>
     </div>
   );

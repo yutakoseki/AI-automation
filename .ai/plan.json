@@ -1,54 +1,149 @@
 {
-  "issue_number": 29,
-  "summary": "AddTodoModal と EditTodoModal の className を既存のダークモード配色 (dark:bg-gray-900 / dark:bg-gray-800 / dark:text-gray-100 など) に揃え、レスポンシブ幅 (w-11/12 max-w-md)、フォーカスリング、role/aria-modal/aria-labelledby を追加する。ロジック・props・state は変更しない。",
+  "issue_number": 36,
+  "issue_summary": "TODO 追加/編集時にカンマ区切りで複数タグを入力でき、各 TODO がタグ配列を持ち、画面上にバッジ表示できるようにする。将来の絞り込み・色分けを見据えた構造にする。",
+  "spec_summary": "Todo 型に tags: string[] を追加し、Add/Edit モーダルにカンマ区切りのタグ入力欄を新設。入力はトリム・空文字除去・重複排除して配列化。TodoItem でバッジ表示。pages/index.tsx の handleAdd/handleEdit を tags 引数対応に拡張。",
+  "summary": "Todo モデルに tags フィールドを追加し、追加/編集モーダルでカンマ区切り入力を受け付け、TodoItem にバッジ表示する。フィルタ等の高度機能は out_of_scope。",
   "confidence": "high",
+  "test_items": {
+    "required": [
+      {
+        "id": "REQ-1",
+        "description": "types/todo.ts の Todo 型に tags: string[] フィールドが存在する。",
+        "verification_method": "static",
+        "acceptance": "types/todo.ts に `tags` プロパティが宣言されており、要素型が string の配列であること。"
+      },
+      {
+        "id": "REQ-2",
+        "description": "AddTodoModal にタグ入力欄が追加され、カンマ区切り文字列が string[] にパースされて onAdd に渡される。",
+        "verification_method": "diff",
+        "acceptance": "AddTodoModal.tsx で tags 用 input が存在し、`,` で split → trim → 空除去 のロジックが含まれ、onAdd の引数として tags 配列が渡されること。"
+      },
+      {
+        "id": "REQ-3",
+        "description": "EditTodoModal で既存タグを編集でき、保存時にタグ配列で onSave に渡される。",
+        "verification_method": "diff",
+        "acceptance": "EditTodoModal.tsx でタグ用 input の初期値が `todo.tags?.join(', ') ?? ''`、保存時に同様のパースで配列化し onSave に渡すこと。"
+      },
+      {
+        "id": "REQ-4",
+        "description": "TodoItem でタグがバッジ/ラベルとして表示される。",
+        "verification_method": "diff",
+        "acceptance": "TodoItem.tsx で todo.tags を map し、Tailwind でバッジ風スタイルを当てた要素を描画していること。"
+      },
+      {
+        "id": "REQ-5",
+        "description": "TypeScript ビルドが成功する（型エラーが出ない）。",
+        "verification_method": "build",
+        "acceptance": "`npx next build` 相当が型エラー無しで完了すること（ローカル/CI）。"
+      }
+    ],
+    "optional": [
+      {
+        "id": "OPT-1",
+        "description": "タグの重複入力をユニーク化する。",
+        "verification_method": "static",
+        "acceptance": "Add/Edit モーダルのパース処理に重複排除（Set 等）が含まれる。"
+      },
+      {
+        "id": "OPT-2",
+        "description": "将来のタグ色分け/フィルタ拡張を想定した構造（独立した badge レンダリングや data-tag 属性など）。",
+        "verification_method": "reviewer",
+        "acceptance": "タグレンダリング部分が再利用しやすい形（mapで個別要素、固有 className または data 属性付き）になっていること。"
+      },
+      {
+        "id": "OPT-3",
+        "description": "タグ入力欄に例示プレースホルダ `家事, 買い物, 優先` を入れる。",
+        "verification_method": "diff",
+        "acceptance": "Add/Edit モーダルのタグ input に該当 placeholder が指定されている。"
+      },
+      {
+        "id": "OPT-4",
+        "description": "タグ入力欄に aria-label を付与しアクセシビリティを担保する。",
+        "verification_method": "diff",
+        "acceptance": "タグ input に aria-label が指定されている。"
+      }
+    ]
+  },
   "target_files": [
+    "types/todo.ts",
     "components/AddTodoModal.tsx",
-    "components/EditTodoModal.tsx"
+    "components/EditTodoModal.tsx",
+    "components/TodoItem.tsx",
+    "pages/index.tsx"
   ],
   "required_changes": [
     {
-      "file": "components/AddTodoModal.tsx",
-      "change": "オーバーレイに dark:bg-black dark:bg-opacity-60 と role=\"dialog\" / aria-modal=\"true\" / aria-labelledby=\"add-todo-modal-title\" を追加。パネルの border を border border-gray-200 dark:border-gray-700 に、bg-white を bg-white dark:bg-gray-900 に、w-96 を w-11/12 max-w-md に変更。<h2> に id=\"add-todo-modal-title\" と dark:text-gray-100 を追加。全フォーム入力 (text input, textarea, date input) に bg-white dark:bg-gray-800、border border-gray-300 dark:border-gray-600、dark:text-gray-100、dark:placeholder-gray-400、focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 を追加。プライマリボタンに focus:outline-none focus:ring-2 focus:ring-blue-400 を追加。キャンセルボタンを bg-gray-500 hover:bg-gray-600 dark:bg-gray-700 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-400 に変更。props / state / handler は変更しない。",
-      "reason": "現状 bg-white と固定グレー系テキストでハードコードされており、pages/index.tsx などで適用されているダーク配色と視覚的に乖離しているため。",
+      "file": "types/todo.ts",
+      "change": "Todo 型に `tags: string[]` フィールドを追加する。",
+      "reason": "各 TODO が任意個数のタグを保持できる構造にするため。",
       "acceptance_criteria": [
-        "ダークモードでパネル背景が dark:bg-gray-900、テキストが dark:text-gray-100、入力背景が dark:bg-gray-800 になっている",
-        "ライトモード時の見た目に重大な後退がない",
-        "オーバーレイ要素に role=\"dialog\" と aria-modal=\"true\"、aria-labelledby=\"add-todo-modal-title\" が付与されている",
-        "<h2> に id=\"add-todo-modal-title\" が付与されている",
-        "パネル幅が w-11/12 max-w-md となり、360px 幅でも水平スクロールが発生しない",
-        "入力とボタンにフォーカス時の ring が表示される",
-        "onAdd / onClose のシグネチャと呼び出し順は変更されていない"
+        "tags プロパティが string[] として宣言されている。",
+        "他フィールド（id, title, details, deadline, completed）はそのまま残る。"
+      ]
+    },
+    {
+      "file": "components/AddTodoModal.tsx",
+      "change": "タグ用 input を追加し、カンマ区切り文字列をトリム・空除去・重複排除して string[] にしてから onAdd に渡す。props 型の onAdd を `(title, details, deadline, tags) => void` に拡張。",
+      "reason": "追加時にタグを入力可能にし、データ構造へ反映するため。",
+      "acceptance_criteria": [
+        "タグ入力 input が表示され、value/onChange が state に紐づく。",
+        "handleAdd で `,` 分割 → trim → 空除去 → unique のパースが行われる。",
+        "onAdd の 4 引数目に tags 配列が渡る。",
+        "タグ未入力時は空配列を渡し、保存自体は阻害しない。",
+        "プレースホルダに例示 `家事, 買い物, 優先` を入れる（推奨）。",
+        "aria-label でアクセシビリティ対応（推奨）。"
       ]
     },
     {
       "file": "components/EditTodoModal.tsx",
-      "change": "AddTodoModal と同一のダークモード・レスポンシブ・アクセシビリティ更新を適用する。aria-labelledby と <h2> の id は \"edit-todo-modal-title\" を使用。見出し文言 (『TODO を編集』) とボタン文言 (『保存』『キャンセル』) は維持。props / state / handler は変更しない。",
-      "reason": "AddTodoModal と構造がほぼ同一で同じ問題を抱えており、両モーダルを視覚的に統一する必要があるため。",
+      "change": "タグ用 input を追加。初期値は `todo.tags?.join(', ') ?? ''`。保存時に AddTodoModal と同じパースで string[] 化し onSave に渡す。props 型の onSave を `(title, details, deadline, tags) => void` に拡張。",
+      "reason": "既存 TODO のタグ編集を可能にするため。",
       "acceptance_criteria": [
-        "AddTodoModal と同一のダーク配色クラスが適用されている",
-        "aria-labelledby=\"edit-todo-modal-title\" と <h2 id=\"edit-todo-modal-title\"> が設定されている",
-        "編集保存フロー (onSave(title, details, deadline) → onClose()) が変更されていない",
-        "todo の初期値読み込みロジックが変更されていない"
+        "既存 tags がカンマ区切り文字列としてフォームに表示される。",
+        "保存時に配列化された tags が onSave に渡る。",
+        "tags 未定義の既存 TODO でも壊れない。"
+      ]
+    },
+    {
+      "file": "components/TodoItem.tsx",
+      "change": "todo.tags をバッジ/ラベルとして表示する。onEdit シグネチャを (id, title, details, deadline, tags) に拡張し、EditTodoModal からの値を渡す。",
+      "reason": "ユーザがタグを視認でき、編集導線にも反映するため。",
+      "acceptance_criteria": [
+        "todo.tags?.map(...) でバッジが描画される（Tailwind: 角丸の小サイズラベル）。",
+        "タグ無し（undefined / 空配列）でも描画が壊れない。",
+        "onEdit に tags が渡る。",
+        "バッジ表示部分は将来の色分け/フィルタ用に拡張しやすい形にする。"
+      ]
+    },
+    {
+      "file": "pages/index.tsx",
+      "change": "handleAdd / handleEdit を tags: string[] 受け取り対応に拡張し、Todo 生成時 / 更新時に tags を格納する。",
+      "reason": "親側の状態管理を新構造に合わせるため。",
+      "acceptance_criteria": [
+        "handleAdd が tags を受け取り createId 時に `tags: tags ?? []` で初期化する。",
+        "handleEdit が tags を受け取り該当 Todo の tags を更新する。",
+        "AddTodoModal / TodoItem への props 型に矛盾がない。"
       ]
     }
   ],
   "commands_to_run": [
-    "npm run build"
+    "npm install",
+    "npx next build"
   ],
   "out_of_scope": [
-    "AddTodoModal と EditTodoModal を共通 <Modal> コンポーネントへ抽出するリファクタ",
-    "ESC キー / 背景クリックでのモーダル閉鎖、フォーカストラップ",
-    "明示的なダーク/ライト切替トグル UI の追加",
-    "<input type=\"date\"> のカレンダーポップアップ自体の暗色化",
-    "tailwind.config.js / styles/globals.css / pages/index.tsx など対象外ファイルへの変更"
+    "タグによる絞り込み・フィルタ UI",
+    "タグごとの色分け（プリセットや色選択 UI）",
+    "タグの永続化（localStorage 等）",
+    "タグサジェスト/オートコンプリート",
+    "タグ単位の一覧ページ"
   ],
   "risks": [
-    "tailwind.config.js を未確認だが、リポジトリ内で既に dark: クラスが広く使われており既定の media 戦略で動作している前提。class 戦略へ切り替えても同 dark: クラスは有効。",
-    "bg-opacity-* は Tailwind v4 で廃止予定だが、本プロジェクトは v3 をピン留めしているため安全。",
-    "<input type=\"date\"> のカレンダー UI はブラウザ実装に依存し完全な暗色化はできない。"
+    "TodoItem.onEdit / Modal.onSave / Modal.onAdd の関数シグネチャ変更により、呼び出し側 (pages/index.tsx) の更新漏れがあるとビルドが失敗する。",
+    "既存 Todo データに tags フィールドが無いケースで undefined 参照を起こさないよう、`todo.tags?` の任意連鎖が必要。",
+    "タグの空白・空文字・重複処理が不十分だと UI が崩れる可能性がある。"
   ],
   "open_questions": [
-    "将来的に共通 Modal コンポーネントへ抽出する是非 — 本 PR ではスコープ外として保留。"
+    "タグの最大個数・最大文字数の制約は未定義（今回は無制限としつつ、将来の制約導入を妨げない実装にする）。",
+    "全角カンマ（、）もデリミタ扱いするかは未定義（今回は半角 , のみ対応）。"
   ]
 }

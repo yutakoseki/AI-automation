@@ -9,7 +9,7 @@ type TodoItemProps = {
   /** 削除する */
   onDelete: (id: string) => void;
   /** 編集を保存する */
-  onEdit: (id: string, title: string, details: string, deadline: string) => void;
+  onEdit: (id: string, title: string, details: string, deadline: string, tags: string[]) => void;
 };
 
 /**
@@ -33,13 +33,20 @@ export default function TodoItem({ todo, onToggle, onDelete, onEdit }: TodoItemP
           <strong className="text-lg font-semibold text-gray-900 dark:text-gray-100">{todo.title}</strong>
           <p className="text-sm text-gray-600 dark:text-gray-400">{todo.details}</p>
           <small className="text-xs text-gray-500 dark:text-gray-400">Deadline: {todo.deadline}</small>
+          <div className="flex space-x-1 mt-1">
+            {todo.tags?.map((tag, index) => (
+              <span key={index} className="bg-blue-100 text-blue-800 rounded-full px-2 py-0.5 text-xs" aria-label={`タグ: ${tag}`}>
+                {tag}
+              </span>
+            ))}
+          </div>
         </div>
       </label>
       {isModalOpen && (
         <EditTodoModal
           todo={todo}
-          onSave={(title, details, deadline) => {
-            onEdit(todo.id, title, details, deadline);
+          onSave={(title, details, deadline, tags) => {
+            onEdit(todo.id, title, details, deadline, tags);
             setIsModalOpen(false);
           }}
           onClose={() => setIsModalOpen(false)}

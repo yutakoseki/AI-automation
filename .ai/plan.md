@@ -1,75 +1,46 @@
-# 実装計画: タスク追加・編集モーダルのダーク化＆デザイン統一
+# 実装計画: TODO にタグ機能を追加
 
-## Issue 概要
-タスク追加 (`components/AddTodoModal.tsx`) と編集 (`components/EditTodoModal.tsx`) のモーダルが、ハードコードされた白背景 (`bg-white`) と固定のグレー系テキストで描画されており、アプリ全体で適用されているダークモード (`pages/index.tsx`, `components/TodoItem.tsx`, `styles/globals.css` の `dark:` 系クラス) と統一されていない。両モーダルを既存のダーク配色 (`dark:bg-gray-900`, `dark:bg-gray-800`, `dark:text-gray-100` 等) と整合させ、フォーム・ボタンのトーン、レスポンシブ、アクセシビリティも軽く整える。
+## Issue Summary
+TODO 追加/編集時にカンマ区切りで複数タグを入力できるようにし、各 TODO が任意個数のタグを保持できる構造にする。タグは画面上にバッジ/ラベルとして表示し、将来的なタグごとの一覧・フィルタ・色分けを見据えた設計にする。
 
-## 最小の安全なスライス
-両モーダルコンポーネントの className のみを更新する。Props・state・コールバック・ロジックには触れない。新規ファイル追加や共通化リファクタは行わない。`tailwind.config.js`・`postcss.config.js`・`styles/globals.css` も変更しない (現状の `media` ベースのダーク戦略を維持)。
+## Spec Summary
+- `Todo` 型に `tags: string[]` フィールドを追加する。
+- `AddTodoModal` と `EditTodoModal` にタグ入力欄を追加する。入力はカンマ区切りで複数タグを受け付け、各タグはトリムし空文字を除外し重複を排除する。
+- `TodoItem` で各タグをバッジ/ラベルとして表示する（Tailwind スタイル、アクセシビリティを考慮）。
+- `pages/index.tsx` の `handleAdd` / `handleEdit` をタグ配列を受け取れるように拡張する。
+- 既存 TODO（タグ未設定）の表示・保存が壊れないよう後方互換に注意する（`tags` は省略可能扱いまたは空配列で初期化）。
 
-## 対象ファイル
-- `components/AddTodoModal.tsx`
-- `components/EditTodoModal.tsx`
+## Required Test Items
+- REQ-1: `Todo` 型に `tags: string[]` が存在する（static / TypeScript ビルド通過）。
+- REQ-2: `AddTodoModal` にタグ入力欄が存在し、カンマ区切り入力 `家事, 買い物, 優先` から `["家事","買い物","優先"]` という配列が `onAdd` に渡される（diff/static で確認）。
+- REQ-3: `EditTodoModal` でも既存タグを編集でき、保存時にカンマ区切り入力をパースしてタグ配列で `onSave` に渡される（diff/static）。
+- REQ-4: `TodoItem` で `todo.tags` がバッジ/ラベル状に表示される（manual: 画面確認 / diff: 該当 JSX が存在する）。
+- REQ-5: `next build` が成功し型エラーが出ない（build）。
 
-## 必要な変更
-両ファイルに同じパターンを適用する (見出し id とラベルだけ別)。
+## Optional Test Items
+- OPT-1: タグの重複入力 (`家事, 家事`) はユニーク化される（diff/static）。
+- OPT-2: タグバッジに将来の色分け・フィルタ拡張を想定したマークアップ（例: `data-tag` 属性や独立コンポーネント化）を入れる（reviewer）。
+- OPT-3: 入力欄にプレースホルダ例 `家事, 買い物, 優先` を入れる（manual/diff）。
+- OPT-4: タグ入力欄に `aria-label` を付与しアクセシビリティを担保する（diff）。
 
-1. **オーバーレイ** `<div className="fixed inset-0 ...">`
-   - 既存: `bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full`
-   - 追加: `dark:bg-black dark:bg-opacity-60`
-   - アクセシビリティ属性を追加: `role="dialog"`, `aria-modal="true"`, `aria-labelledby="add-todo-modal-title"` (Add 側) / `aria-labelledby="edit-todo-modal-title"` (Edit 側)。
+## Implementation Notes
+1. `types/todo.ts`: `tags: string[]` を追加。
+2. `AddTodoModal.tsx`: `tags` 用 state (`string`) を追加。`handleAdd` でカンマ区切り文字列を `split(',')` → `map(trim)` → `filter(Boolean)` → ユニーク化し、`onAdd(title, details, deadline, tags)` で渡す。propsの型を拡張。タグ未入力でも他必須項目があれば保存可能（タグは任意）。
+3. `EditTodoModal.tsx`: 初期値は `todo.tags?.join(', ') ?? ''`。保存時は AddModal と同じパース。`onSave(title, details, deadline, tags)`。
+4. `TodoItem.tsx`: タイトル/詳細の下に `todo.tags?.map(...)` でバッジ表示（`bg-blue-100 text-blue-800 rounded-full px-2 py-0.5 text-xs` 程度）。aria-label に「タグ: 〜」を付ける。`onEdit` シグネチャ拡張に追従。
+5. `pages/index.tsx`: `handleAdd` / `handleEdit` の引数に `tags: string[]` を追加して `Todo` に格納。`createId` 時の初期化に `tags: tags ?? []`。
+6. 既存の表示順序（タイトル → 詳細 → 期限）を維持し、タグはその下に表示する。
+7. タグの色分け・フィルタ・タグごとの一覧表示は今回の PR では扱わない（out_of_scope）。
 
-2. **パネル** `<div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">`
-   - 置換: `border` → `border border-gray-200 dark:border-gray-700`
-   - 置換: `bg-white` → `bg-white dark:bg-gray-900` (index.tsx のメインカードと揃える)
-   - 置換: `w-96` → `w-11/12 max-w-md` (狭幅でのはみ出し回避)
-
-3. **見出し** `<h2 ...>`
-   - 置換: `text-gray-900` → `text-gray-900 dark:text-gray-100`
-   - 追加: `id="add-todo-modal-title"` / `id="edit-todo-modal-title"`
-
-4. **フォーム入力** (title input / details textarea / date input すべて)
-   - 置換: `border` → `border border-gray-300 dark:border-gray-600`
-   - 追加: `bg-white dark:bg-gray-800`
-   - 置換: `text-gray-900 placeholder-gray-500` → `text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400`
-   - 追加: `focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400`
-
-5. **ボタン**
-   - プライマリ (`追加` / `保存`): 既存 `bg-blue-500 hover:bg-blue-700` は維持し、`focus:outline-none focus:ring-2 focus:ring-blue-400` を追加。
-   - セカンダリ (`キャンセル`): `bg-gray-500 hover:bg-gray-700` を `bg-gray-500 hover:bg-gray-600 dark:bg-gray-700 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-400` に変更。
-
-## 受け入れ条件
-- ダークモードで両モーダルのパネル背景・テキスト・入力・ボタンが暗系トーンになり、`pages/index.tsx` 内のカード (`dark:bg-gray-900`) と視覚的に同系統になる。
-- ライトモードでも違和感がない (既存の白系トーンを保つ)。
-- 幅 360px のビューポートでも水平スクロールが発生しない。
-- フォーム入力とボタンがフォーカス時に視認可能なリングを表示する。
-- `<div role="dialog" aria-modal="true" aria-labelledby="…">` が両モーダルに付与され、見出しに対応する `id` が存在する。
-- Props・state・ハンドラのシグネチャに変更はない。
-- `npm run build` が成功する。
-
-## 実行コマンド
-- `npm run build`
-
-## リスク
-- `tailwind.config.js` を読まずに進めているが、本リポジトリは Tailwind v3 で既に `dark:` 系を多用しており、戦略は既定の `media`。後で `class` 戦略へ切り替えても同じ `dark:` クラスは動く。
-- `bg-opacity-*` は Tailwind v4 で廃止予定だが、v3 をピン留めしているので問題なし。
-- `<input type="date">` のカレンダーポップアップはブラウザ依存で完全には暗色化できない。フィールド本体のみテーマ適用される。
-
-## スコープ外 (後続)
-- `AddTodoModal` と `EditTodoModal` を共通 `<Modal>` コンポーネントへリファクタ。
-- ESC キーで閉じる / 背景クリックで閉じる / フォーカストラップ。
-- 明示的なダーク/ライト切替トグル UI の追加。
-- 日付ピッカーの完全な暗色化。
+## Out of Scope
+- タグによる絞り込み/フィルタ UI。
+- タグごとの色分け（プリセットや色選択）。
+- タグの永続化（localStorage 等）。
+- タグサジェスト（オートコンプリート）。
 
 ## Generator constraints
 - 自律的に実装し、人間の確認を待たない。
 - 計画が広い場合は本ドキュメントの最小スライスのみを実装する。
 - 関係ない箇所のリファクタや大規模書き換えは行わない。
-- 計画外のファイル (`tailwind.config.js`, `styles/globals.css`, `pages/`, `types/` 等) は変更しない。
-
-## Generator constraints
-- Implement the plan autonomously without asking for human clarification.
-- If the plan is broad or uncertain, implement the smallest safe slice described by the plan.
-- Do not perform unrelated refactors or large rewrites.
-- Prefer a useful, reviewable pull request over attempting to solve every out-of-scope item.
-- If a requested file is missing, create it only when the plan explicitly requires a new file; otherwise choose the closest existing file from the target list.
-- Do not run npm install, npm run build, npm run dev, or other shell commands. The evaluator will run verification commands after editing.
+- 計画外のファイル (`tailwind.config.js`, `styles/globals.css` 等) は変更しない。
+- npm install / npm run build / npm run dev 等は Generator では実行しない（評価側で検証する）。
