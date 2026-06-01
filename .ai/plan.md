@@ -1,70 +1,101 @@
-# 実装計画: タスク追加・編集モーダルのダーク化＆デザイン統一
+# Implementation Plan: TODO にタグ機能を追加（カンマ区切りで複数可）
 
-## Issue 概要
-タスク追加 (`components/AddTodoModal.tsx`) と編集 (`components/EditTodoModal.tsx`) のモーダルが、ハードコードされた白背景 (`bg-white`) と固定のグレー系テキストで描画されており、アプリ全体で適用されているダークモード (`pages/index.tsx`, `components/TodoItem.tsx`, `styles/globals.css` の `dark:` 系クラス) と統一されていない。両モーダルを既存のダーク配色 (`dark:bg-gray-900`, `dark:bg-gray-800`, `dark:text-gray-100` 等) と整合させ、フォーム・ボタンのトーン、レスポンシブ、アクセシビリティも軽く整える。
+## Issue Summary
+TODO の追加・編集時にカンマ区切りでタグを複数入力できるようにし、各 TODO に任意個数のタグを保持・表示する。将来的にフィルタや色分けへの拡張ができる構造で実装する。
+
+## Specification Summary
+- `Todo` 型に `tags: string[]` を追加。
+- `AddTodoModal` / `EditTodoModal` に「タグ（カンマ区切り）」入力欄を追加。
+- 入力文字列をカンマ（`,` または日本語全角 `、`）で分割し、各要素を `trim`、空要素・重複を除外して `string[]` 化する。
+- `pages/index.tsx` の `handleAdd` / `handleEdit` のシグネチャに `tags: string[]` を追加し、状態に保存する。
+- `TodoItem` で `todo.tags` をバッジ（ラベル）として表示する。アクセシビリティを考慮した属性も付与する。
+- タグは任意項目。空でも TODO 追加・編集は成立する（既存の必須項目バリデーションは変更しない）。
 
 ## 最小の安全なスライス
-両モーダルコンポーネントの className のみを更新する。Props・state・コールバック・ロジックには触れない。新規ファイル追加や共通化リファクタは行わない。`tailwind.config.js`・`postcss.config.js`・`styles/globals.css` も変更しない (現状の `media` ベースのダーク戦略を維持)。
+- 既存のロジック・UI・必須バリデーションは温存し、`tags` フィールドの追加と入力・表示にスコープを絞る。
+- 共通のパースヘルパー `lib/parseTags.ts` を新設し、両モーダルから利用する。
+- フィルタ／色分け／永続化／タグサジェスト等は将来拡張に回し、本 PR では実装しない。
 
 ## 対象ファイル
+- `types/todo.ts`
 - `components/AddTodoModal.tsx`
 - `components/EditTodoModal.tsx`
+- `components/TodoItem.tsx`
+- `pages/index.tsx`
+- `lib/parseTags.ts`（新規）
 
 ## 必要な変更
-両ファイルに同じパターンを適用する (見出し id とラベルだけ別)。
 
-1. **オーバーレイ** `<div className="fixed inset-0 ...">`
-   - 既存: `bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full`
-   - 追加: `dark:bg-black dark:bg-opacity-60`
-   - アクセシビリティ属性を追加: `role="dialog"`, `aria-modal="true"`, `aria-labelledby="add-todo-modal-title"` (Add 側) / `aria-labelledby="edit-todo-modal-title"` (Edit 側)。
+### 1. `types/todo.ts`
+- `Todo` 型に `tags: string[]` を追加。
 
-2. **パネル** `<div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">`
-   - 置換: `border` → `border border-gray-200 dark:border-gray-700`
-   - 置換: `bg-white` → `bg-white dark:bg-gray-900` (index.tsx のメインカードと揃える)
-   - 置換: `w-96` → `w-11/12 max-w-md` (狭幅でのはみ出し回避)
+### 2. `lib/parseTags.ts`（新規）
+- `parseTags(input: string): string[]` を default export または named export で提供。
+- 仕様:
+  - 入力を `,` または `、` で分割。
+  - 各要素を `trim()`。
+  - 空文字を除外。
+  - 重複を除外（最初に出現した順を保持）。
 
-3. **見出し** `<h2 ...>`
-   - 置換: `text-gray-900` → `text-gray-900 dark:text-gray-100`
-   - 追加: `id="add-todo-modal-title"` / `id="edit-todo-modal-title"`
+### 3. `components/AddTodoModal.tsx`
+- `tags` 用の state `const [tagsInput, setTagsInput] = useState("")` を追加。
+- `<input>` でタグ入力欄を追加。`placeholder="タグ（カンマ区切り）"`。
+- `onAdd` シグネチャ拡張: `(title, details, deadline, tags: string[])`。
+- 追加時に `parseTags(tagsInput)` で配列化して渡す。
+- タグは必須ではないため、空でも追加処理を続行する（既存の必須バリデーションは維持）。
 
-4. **フォーム入力** (title input / details textarea / date input すべて)
-   - 置換: `border` → `border border-gray-300 dark:border-gray-600`
-   - 追加: `bg-white dark:bg-gray-800`
-   - 置換: `text-gray-900 placeholder-gray-500` → `text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400`
-   - 追加: `focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400`
+### 4. `components/EditTodoModal.tsx`
+- `tagsInput` の初期値は `(todo.tags ?? []).join(", ")` で復元。
+- `<input>` でタグ入力欄を追加。
+- `onSave` シグネチャ拡張: `(title, details, deadline, tags: string[])`。
+- 保存時に `parseTags(tagsInput)` を渡す。
 
-5. **ボタン**
-   - プライマリ (`追加` / `保存`): 既存 `bg-blue-500 hover:bg-blue-700` は維持し、`focus:outline-none focus:ring-2 focus:ring-blue-400` を追加。
-   - セカンダリ (`キャンセル`): `bg-gray-500 hover:bg-gray-700` を `bg-gray-500 hover:bg-gray-600 dark:bg-gray-700 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-400` に変更。
+### 5. `components/TodoItem.tsx`
+- `onEdit` シグネチャ拡張: `(id, title, details, deadline, tags: string[])`。
+- `(todo.tags ?? []).map(...)` でバッジ要素を生成し、タイトル下の領域に表示する。
+- バッジは丸い小さなラベル風（Tailwind 例: `inline-block px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200`）。
+- タグ全体のコンテナに `aria-label="タグ"` 等のアクセシビリティ属性を付与し、各バッジに `role="listitem"`（コンテナは `role="list"`）を付ける。
 
-## 受け入れ条件
-- ダークモードで両モーダルのパネル背景・テキスト・入力・ボタンが暗系トーンになり、`pages/index.tsx` 内のカード (`dark:bg-gray-900`) と視覚的に同系統になる。
-- ライトモードでも違和感がない (既存の白系トーンを保つ)。
-- 幅 360px のビューポートでも水平スクロールが発生しない。
-- フォーム入力とボタンがフォーカス時に視認可能なリングを表示する。
-- `<div role="dialog" aria-modal="true" aria-labelledby="…">` が両モーダルに付与され、見出しに対応する `id` が存在する。
-- Props・state・ハンドラのシグネチャに変更はない。
-- `npm run build` が成功する。
+### 6. `pages/index.tsx`
+- `handleAdd` シグネチャを `(title, details, deadline, tags: string[])` に拡張。
+- 新 Todo の作成時に `tags` を含める。
+- `handleEdit` シグネチャを `(id, title, details, deadline, tags: string[])` に拡張し、`tags` を更新する。
+- `AddTodoModal` への props 伝搬を新シグネチャに合わせる。
+
+## Required Test Items
+- REQ-1: `types/todo.ts` の `Todo` 型に `tags: string[]` が追加されている。
+- REQ-2: `AddTodoModal` にタグ入力欄（カンマ区切り）があり、入力された値がカンマ区切り → 配列としてパースされ、`onAdd` の引数として伝搬する。
+- REQ-3: `EditTodoModal` にタグ入力欄があり、既存 TODO の `tags` が初期値として表示され、編集後の値が `onSave` に渡る。
+- REQ-4: `pages/index.tsx` の `handleAdd` / `handleEdit` が `tags` を受け取り、`Todo` の `tags` フィールドに保存する。
+- REQ-5: `TodoItem` で `todo.tags` がバッジ／ラベル状の UI として表示される（タグが 0 個の場合は何も表示しない）。
+- REQ-6: タグのパース処理が以下を満たす：先頭・末尾の空白除去、空要素除外、重複除外。
+- REQ-7: `npm run build` が成功する（型エラーなし）。
+
+## Optional Test Items
+- OPT-1: ダークモード（`dark:` クラス）でもタグバッジが視認可能。
+- OPT-2: 全角カンマ（`、`）でもタグ区切りとして処理される。
+- OPT-3: タグ表示コンテナに `aria-label` 等のアクセシビリティ属性が付与されている。
+
+## Implementation Notes
+- 既存の必須バリデーション（title / details / deadline）はそのまま。tags は任意（空配列 OK）。
+- `TodoItem` 内では `todo.tags ?? []` で安全にアクセスし、既存の `Todo` 形式変更に強くする。
+- 状態は引き続きインメモリ管理。永続化は不要。
+- 入力欄は既存のスタイルパターン（`border`, `dark:` クラス, focus ring）を踏襲する。
 
 ## 実行コマンド
 - `npm run build`
 
 ## リスク
-- `tailwind.config.js` を読まずに進めているが、本リポジトリは Tailwind v3 で既に `dark:` 系を多用しており、戦略は既定の `media`。後で `class` 戦略へ切り替えても同じ `dark:` クラスは動く。
-- `bg-opacity-*` は Tailwind v4 で廃止予定だが、v3 をピン留めしているので問題なし。
-- `<input type="date">` のカレンダーポップアップはブラウザ依存で完全には暗色化できない。フィールド本体のみテーマ適用される。
+- `Todo` 型の必須プロパティ追加により、既存の `setTodos(...)` 呼び出しすべてが `tags` を要求するようになる。本計画では `pages/index.tsx` の生成箇所をすべて更新するため整合する。
+- `onEdit` / `onAdd` / `onSave` のシグネチャ変更は内部のみで、外部からの import は無いため影響は閉じている。
+- 全角カンマ対応（`、`）は OPT 扱いだが、`parseTags` の最初の実装に組み込んでも安全（仕様としてリストアップ済み）。
 
-## スコープ外 (後続)
-- `AddTodoModal` と `EditTodoModal` を共通 `<Modal>` コンポーネントへリファクタ。
-- ESC キーで閉じる / 背景クリックで閉じる / フォーカストラップ。
-- 明示的なダーク/ライト切替トグル UI の追加。
-- 日付ピッカーの完全な暗色化。
-
-## Generator constraints
-- 自律的に実装し、人間の確認を待たない。
-- 計画が広い場合は本ドキュメントの最小スライスのみを実装する。
-- 関係ない箇所のリファクタや大規模書き換えは行わない。
-- 計画外のファイル (`tailwind.config.js`, `styles/globals.css`, `pages/`, `types/` 等) は変更しない。
+## Out of Scope (今回の PR では実装しない)
+- タグによる絞り込み（フィルタ）UI。
+- タグごとの色分け（自動色割り当て）。
+- タグ一覧画面 / タグサジェスト / オートコンプリート。
+- 永続化（localStorage / DB 等）。
+- タグの個別削除 UI（バッジに ✕ ボタン等）。
 
 ## Generator constraints
 - Implement the plan autonomously without asking for human clarification.

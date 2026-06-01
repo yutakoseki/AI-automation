@@ -5,4 +5,5 @@ export type Todo = {
   details: string;
   deadline: string;
   completed: boolean;
+  tags: string[];
 };

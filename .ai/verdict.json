@@ -1,24 +1,107 @@
 {
   "approved": true,
-  "reason": "Implementation produced a diff and npm run build passed.",
+  "reason": "Generator produced buildable code and evaluator checks passed.",
   "metrics": {
-    "changed_file_count": 2,
-    "target_match_count": 2,
+    "changed_file_count": 5,
+    "target_match_count": 5,
     "unplanned_file_count": 0,
-    "repair_attempts": 0
+    "repair_attempts": 3,
+    "evaluator_fix_attempts": 0
   },
   "checks": {
     "generated_diff": true,
     "touched_planner_target": true,
     "build_passed": true
   },
+  "test_results": {
+    "required": [
+      {
+        "id": "REQ-1",
+        "description": "types/todo.ts の Todo 型に tags: string[] フィールドが追加されている。",
+        "verification_method": "static",
+        "acceptance": "Todo 型の定義内に tags: string[] が存在し、tsc がエラーを出さない。",
+        "status": "passed"
+      },
+      {
+        "id": "REQ-2",
+        "description": "AddTodoModal にタグ入力欄（カンマ区切り）が追加され、onAdd 呼び出し時にパースされた string[] が第 4 引数として渡る。",
+        "verification_method": "diff",
+        "acceptance": "AddTodoModal.tsx に tags 用 <input> が追加され、onAdd のシグネチャが (title, details, deadline, tags: string[]) になっている。",
+        "status": "passed"
+      },
+      {
+        "id": "REQ-3",
+        "description": "EditTodoModal にタグ入力欄があり、todo.tags が初期値として表示され、編集後の値が onSave に第 4 引数として渡る。",
+        "verification_method": "diff",
+        "acceptance": "EditTodoModal.tsx に tags 用 <input> があり、初期値は (todo.tags ?? []).join(', ')。onSave のシグネチャは (title, details, deadline, tags: string[])。",
+        "status": "passed"
+      },
+      {
+        "id": "REQ-4",
+        "description": "pages/index.tsx の handleAdd / handleEdit が tags を受け取り、Todo の tags フィールドに保存する。",
+        "verification_method": "diff",
+        "acceptance": "handleAdd / handleEdit のシグネチャが拡張され、新規・更新時に tags が状態に反映される。",
+        "status": "passed"
+      },
+      {
+        "id": "REQ-5",
+        "description": "TodoItem で todo.tags がバッジ／ラベル状の UI として表示される。タグが 0 個の場合は何も表示しない。",
+        "verification_method": "diff",
+        "acceptance": "TodoItem.tsx に tags.map(...) によるバッジ描画があり、(todo.tags ?? []).length === 0 の場合はバッジ領域がレンダリングされない。",
+        "status": "passed"
+      },
+      {
+        "id": "REQ-6",
+        "description": "parseTags ユーティリティ（lib/parseTags.ts）がカンマ区切り文字列を string[] に変換し、空白除去・空要素除外・重複除外を行う。",
+        "verification_method": "static",
+        "acceptance": "lib/parseTags.ts に parseTags(input: string): string[] が存在し、'foo, bar, ,foo' → ['foo', 'bar'] を返す実装になっている。",
+        "status": "passed"
+      },
+      {
+        "id": "REQ-7",
+        "description": "npm run build が成功する（型エラーなし）。",
+        "verification_method": "build",
+        "acceptance": "npm run build が exit code 0 で終了する。",
+        "status": "passed"
+      }
+    ],
+    "optional": [
+      {
+        "id": "OPT-1",
+        "description": "ダークモード（dark: クラス）でもタグバッジが視認可能な配色になっている。",
+        "verification_method": "manual",
+        "acceptance": "バッジに dark:bg-* / dark:text-* クラスが付与されており、暗背景上でも読める。",
+        "status": "optional"
+      },
+      {
+        "id": "OPT-2",
+        "description": "parseTags が全角カンマ（、）も区切り文字として処理する。",
+        "verification_method": "static",
+        "acceptance": "'foo、bar' → ['foo', 'bar'] を返す。",
+        "status": "optional"
+      },
+      {
+        "id": "OPT-3",
+        "description": "タグ表示コンテナにアクセシビリティ属性（aria-label など）が付与されている。",
+        "verification_method": "diff",
+        "acceptance": "TodoItem.tsx のタグコンテナに aria-label=\"タグ\" または同等の属性が付いている。",
+        "status": "optional"
+      }
+    ]
+  },
   "changed_files": [
     "components/AddTodoModal.tsx",
-    "components/EditTodoModal.tsx"
+    "components/EditTodoModal.tsx",
+    "components/TodoItem.tsx",
+    "pages/index.tsx",
+    "types/todo.ts"
   ],
   "matched_target_files": [
     "components/AddTodoModal.tsx",
-    "components/EditTodoModal.tsx"
+    "components/EditTodoModal.tsx",
+    "components/TodoItem.tsx",
+    "pages/index.tsx",
+    "types/todo.ts"
   ],
   "unplanned_files": [],
   "blocking_issues": []
