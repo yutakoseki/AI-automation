@@ -79,19 +79,14 @@ jobs:
           git checkout -b "$BRANCH_NAME"
 
           # Plannerが特定した対象ファイルと実装計画をAiderに渡す
-          cat << 'EOF' >> .ai/plan.md
-
-          ## Generator constraints
-          - Implement the plan autonomously without asking for human clarification.
-          - If the plan is broad or uncertain, implement the smallest safe slice described by the plan.
-          - Do not perform unrelated refactors or large rewrites.
-          - Prefer a useful, reviewable pull request over attempting to solve every out-of-scope item.
-          - If a requested file is missing, create it only when the plan explicitly requires a new file; otherwise choose the closest existing file from the target list.
-          - Do not run npm install, npm run build, npm run dev, or other shell commands. The evaluator will run verification commands after editing.
-          EOF
-
+          {
+            cat .github/ai-harness/generator.md
+            echo
+            echo "# Implementation Plan"
+            cat .ai/plan.md
+          } > .ai/generator-message.md
           mapfile -t TARGET_FILES < <(sed '/^[[:space:]]*$/d' .ai/target-files.txt)
-          aider "${TARGET_FILES[@]}" --message-file .ai/plan.md --yes --no-auto-commits
+          aider "${TARGET_FILES[@]}" --message-file .ai/generator-message.md --yes --no-auto-commits
 
           if [ -z "$(git status --porcelain --untracked-files=all -- ':!.ai')" ]; then
             echo "Generator produced no changes"
@@ -119,11 +114,10 @@ jobs:
               {
                 echo "# Repair request"
                 echo
+                cat .github/ai-harness/generator-repair.md
+                echo
                 echo "The implementation generated from .ai/plan.md failed npm run build."
                 echo "This is repair attempt ${attempt} of 4."
-                echo "Fix only the build/type errors below. Do not add unrelated features, refactors, validation behavior changes, or styling changes."
-                echo "Preserve existing runtime behavior unless the build error requires a minimal type-safe adjustment."
-                echo "Do not browse the web. Do not run shell commands. Only edit files."
                 echo
                 echo "## Build log"
                 echo '```'
@@ -299,8 +293,7 @@ jobs:
             {
               echo "# Evaluator fix request"
               echo
-              echo "The Evaluator rejected the generated implementation."
-              echo "Fix only the issues listed below, then stop. Do not add unrelated features or refactors."
+              cat .github/ai-harness/evaluator-fix.md
               echo
               echo "## Evaluation"
               cat .ai/evaluation.md
@@ -324,7 +317,7 @@ jobs:
             exit 1
           fi
 
-          rm -f .ai/build.log .ai/build-sanitized.log .ai/build-focused.log .ai/repair.md .ai/fix-request.md
+          rm -f .ai/build.log .ai/build-sanitized.log .ai/build-focused.log .ai/generator-message.md .ai/repair.md .ai/fix-request.md
 
           # AI_PATがあればworkflowファイル変更にも対応できる。なければGITHUB_TOKENで試す。
           PUSH_TOKEN="${AI_PAT:-${{ secrets.GITHUB_TOKEN }}}"
