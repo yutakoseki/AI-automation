@@ -143,8 +143,15 @@ jobs:
           else
             STATUS="PR成功 / 要確認"
           fi
-          TEST_RESULTS="$(printf '%s' "$TEST_RESULTS" | tr '\n' ' ' | cut -c 1-700)"
-          ESCALATION="$(printf '%s' "$ESCALATION" | tr '\n' ' ' | cut -c 1-500)"
+          PASSED_COUNT="$(printf '%s\n' "$TEST_RESULTS" | grep -c '^[-[:space:]]*✓' || true)"
+          NEEDS_COUNT="$(printf '%s\n' "$TEST_RESULTS" | grep -c '^[-[:space:]]*△' || true)"
+          FAILED_COUNT="$(printf '%s\n' "$TEST_RESULTS" | grep -c '^[-[:space:]]*✗' || true)"
+          TEST_SUMMARY="通過 ${PASSED_COUNT} / 要確認 ${NEEDS_COUNT} / 失敗 ${FAILED_COUNT}"
+          if [ -z "$ESCALATION" ] || [ "$ESCALATION" = "なし" ]; then
+            ESCALATION_SUMMARY="なし"
+          else
+            ESCALATION_SUMMARY="あり（詳細はPRコメント）"
+          fi
 
           jq -n \
             --arg title "AIレビュー完了: PR #${PR_NUMBER}" \
@@ -154,23 +161,23 @@ jobs:
             --arg status "$STATUS" \
             --arg verdict "${VERDICT:-要確認}" \
             --arg score "${SCORE:-未採点}" \
-            --arg test_results "${TEST_RESULTS:-テスト結果なし}" \
-            --arg escalation "${ESCALATION:-なし}" \
+            --arg test_summary "$TEST_SUMMARY" \
+            --arg escalation_summary "$ESCALATION_SUMMARY" \
             '{
               text: $title,
               blocks: [
                 { type: "header", text: { type: "plain_text", text: "AIレビュー完了" } },
-                { type: "section", text: { type: "plain_text", text: ("PR #" + $pr_number + ": " + $pr_title) } },
+                { type: "section", text: { type: "plain_text", text: ("PR #" + $pr_number + " " + $pr_title) } },
                 {
                   type: "section",
                   fields: [
-                    { type: "plain_text", text: ("状態: " + $status) },
                     { type: "plain_text", text: ("判定: " + $verdict) },
-                    { type: "plain_text", text: ("スコア: " + $score) }
+                    { type: "plain_text", text: ("スコア: " + $score) },
+                    { type: "plain_text", text: ("状態: " + $status) },
+                    { type: "plain_text", text: ("テスト: " + $test_summary) },
+                    { type: "plain_text", text: ("人間確認: " + $escalation_summary) }
                   ]
                 },
-                { type: "section", text: { type: "plain_text", text: ("テスト結果: " + $test_results) } },
-                { type: "section", text: { type: "plain_text", text: ("人間へのエスカレーション: " + $escalation) } },
                 { type: "actions", elements: [ { type: "button", text: { type: "plain_text", text: "PRを開く" }, url: $pr_url } ] }
               ]
             }' > .ai/slack-payload.json
