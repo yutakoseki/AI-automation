@@ -77,6 +77,12 @@ jobs:
             exit 1
           fi
 
+          required_test_count="$(jq '(.test_items.required // []) | length' .ai/plan.json)"
+          if [ "$required_test_count" -eq 0 ]; then
+            echo "Planner failed: test_items.required is empty"
+            exit 1
+          fi
+
           while IFS= read -r file; do
             [ -z "$file" ] && continue
             if [ ! -e "$file" ]; then

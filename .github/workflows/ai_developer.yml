@@ -48,6 +48,12 @@ jobs:
             exit 1
           fi
 
+          required_test_count="$(jq '(.test_items.required // []) | length' .ai/plan.json)"
+          if [ "$required_test_count" -eq 0 ]; then
+            echo "Generator refused to run: test_items.required is empty"
+            exit 1
+          fi
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -144,6 +150,12 @@ jobs:
             {
               echo "# AI Evaluation"
               echo
+              echo "## Required Test Items"
+              jq -r '.test_items.required[]? | "- [必須] " + (.id // "REQ") + ": " + .description + " / 指標: " + (.acceptance // "未定義")' .ai/plan.json
+              echo
+              echo "## Optional Test Items"
+              jq -r '.test_items.optional[]? | "- [任意] " + (.id // "OPT") + ": " + .description + " / 指標: " + (.acceptance // "未定義")' .ai/plan.json
+              echo
               echo "## Checks"
               echo "- Generator self-check: failed"
               echo "- Automatic repair attempts: ${REPAIR_ATTEMPTS}"
@@ -156,6 +168,8 @@ jobs:
 
             jq -n \
               --arg reason "$EVALUATION_REASON" \
+              --argjson required_test_results "$(jq -c '(.test_items.required // []) | map(. + {status: "blocked"})' .ai/plan.json)" \
+              --argjson optional_test_results "$(jq -c '(.test_items.optional // []) | map(. + {status: "optional"})' .ai/plan.json)" \
               --argjson repair_attempts "$REPAIR_ATTEMPTS" \
               '{
                 approved: false,
@@ -164,6 +178,10 @@ jobs:
                 checks: {
                   generator_self_check: false,
                   build_passed: false
+                },
+                test_results: {
+                  required: $required_test_results,
+                  optional: $optional_test_results
                 },
                 blocking_issues: [$reason]
               }' > .ai/verdict.json
@@ -196,6 +214,12 @@ jobs:
               echo "- Final unplanned changed files: ${UNPLANNED_FILE_COUNT}"
               echo "- Generator automatic repair attempts: ${REPAIR_ATTEMPTS}"
               echo "- Evaluator requested fixes: ${EVALUATOR_FIX_ATTEMPTS}"
+              echo
+              echo "## Required Test Items"
+              jq -r '.test_items.required[]? | "- [必須] " + (.id // "REQ") + ": " + .description + " / 指標: " + (.acceptance // "未定義")' .ai/plan.json
+              echo
+              echo "## Optional Test Items"
+              jq -r '.test_items.optional[]? | "- [任意] " + (.id // "OPT") + ": " + .description + " / 指標: " + (.acceptance // "未定義")' .ai/plan.json
               echo
               echo "## Changed Files"
               if [ -n "$CHANGED_FILES" ]; then
@@ -240,15 +264,22 @@ jobs:
 
             if npm run build > .ai/build.log 2>&1; then
               echo "- Evaluator final build: passed" >> .ai/evaluation.md
+              BUILD_PASSED=true
             else
               EVALUATION_STATUS="rejected"
               EVALUATION_REASON="Evaluator final build failed."
               echo "- Evaluator final build: failed" >> .ai/evaluation.md
+              BUILD_PASSED=false
             fi
+
+            REQUIRED_TEST_RESULTS="$(jq -c --arg status "$([ "$EVALUATION_STATUS" = "approved" ] && echo passed || echo blocked)" '(.test_items.required // []) | map(. + {status: $status})' .ai/plan.json)"
+            OPTIONAL_TEST_RESULTS="$(jq -c '(.test_items.optional // []) | map(. + {status: "optional"})' .ai/plan.json)"
 
             jq -n \
               --argjson approved "$([ "$EVALUATION_STATUS" = "approved" ] && echo true || echo false)" \
               --arg reason "$EVALUATION_REASON" \
+              --argjson required_test_results "$REQUIRED_TEST_RESULTS" \
+              --argjson optional_test_results "$OPTIONAL_TEST_RESULTS" \
               --argjson changed_file_count "$CHANGED_FILE_COUNT" \
               --argjson target_match_count "$TARGET_MATCH_COUNT" \
               --argjson unplanned_file_count "$UNPLANNED_FILE_COUNT" \
@@ -271,6 +302,10 @@ jobs:
                   generated_diff: ($changed_file_count > 0),
                   touched_planner_target: ($target_match_count > 0),
                   build_passed: $approved
+                },
+                test_results: {
+                  required: $required_test_results,
+                  optional: $optional_test_results
                 },
                 changed_files: ($changed_files | split(" ") | map(select(length > 0))),
                 matched_target_files: ($matched_target_files | split(" ") | map(select(length > 0))),
@@ -345,23 +380,41 @@ jobs:
 
           # PR作成
           export GH_TOKEN="${AI_PAT:-${{ secrets.GITHUB_TOKEN }}}"
-          if ! PR_URL="$(gh pr create --title "[AI] ${ISSUE_TITLE}" --body "
-          ## 課題の概要
-          Closes #${ISSUE_NUMBER}
-          Issueに基づき、AIが自律開発を行いました。
+          {
+            echo "## 課題の概要"
+            echo
+            echo "Closes #${ISSUE_NUMBER}"
+            echo
+            jq -r '.issue_summary // .summary // "Issueに基づき、AIが自律開発を行いました。"' .ai/plan.json
+            echo
+            echo "## 仕様の要約"
+            echo
+            jq -r '.spec_summary // .summary // "Plannerが作成した仕様に従って実装しました。"' .ai/plan.json
+            echo
+            echo "## テスト項目（必須）"
+            echo
+            jq -r '.test_items.required[]? | "- " + (.id // "REQ") + ": " + .description + " / 完了条件: " + (.acceptance // "未定義")' .ai/plan.json
+            echo
+            echo "## テスト項目（任意）"
+            echo
+            optional_tests="$(jq -r '.test_items.optional[]? | "- " + (.id // "OPT") + ": " + .description + " / 完了条件: " + (.acceptance // "未定義")' .ai/plan.json)"
+            if [ -n "$optional_tests" ]; then
+              printf '%s\n' "$optional_tests"
+            else
+              echo "- なし"
+            fi
+            echo
+            echo "## Evaluator"
+            echo
+            echo "- .ai/evaluation.md"
+            echo "- .ai/verdict.json"
+            echo
+            echo "## 注意事項"
+            echo
+            echo "- AI生成コードです。Evaluator を通過した場合のみPR化されています。"
+          } > .ai/pr-body.md
 
-          ## Planner output
-          - .ai/plan.md
-          - .ai/plan.json
-          - .ai/target-files.txt
-
-          ## Evaluator output
-          - .ai/evaluation.md
-          - .ai/verdict.json
-
-          ## 注意事項
-          - AI生成コードです。Evaluator を通過した場合のみPR化されています。
-          " --base main --head "$BRANCH_NAME" 2> .ai/pr-create-error.log)"; then
+          if ! PR_URL="$(gh pr create --title "[AI] ${ISSUE_TITLE}" --body-file .ai/pr-body.md --base main --head "$BRANCH_NAME" 2> .ai/pr-create-error.log)"; then
             {
               echo "Generated implementation passed evaluation and branch push, but PR creation failed."
               echo

@@ -106,7 +106,8 @@ jobs:
           test -f .ai/review.md
           grep -q '^# AIレビュー' .ai/review.md
           grep -q '^## 判定' .ai/review.md
-          grep -q '^## 人間が見るべき点' .ai/review.md
+          grep -q '^## テスト結果' .ai/review.md
+          grep -q '^## 人間へのエスカレーション' .ai/review.md
 
       - name: Comment review on pull request
         env:
@@ -132,7 +133,8 @@ jobs:
 
           VERDICT="$(awk '/^## 判定/{getline; while ($0 == "") getline; print; exit}' .ai/review.md)"
           SCORE="$(awk '/^## スコア/{getline; while ($0 == "") getline; print; exit}' .ai/review.md)"
-          CONCERNS="$(awk '/^## 人間が見るべき点/{flag=1; next} /^## /{flag=0} flag {print}' .ai/review.md | sed '/^[[:space:]]*$/d' | head -n 3)"
+          TEST_RESULTS="$(awk '/^## テスト結果/{flag=1; next} /^## /{flag=0} flag {print}' .ai/review.md | sed '/^[[:space:]]*$/d' | head -n 5)"
+          ESCALATION="$(awk '/^## 人間へのエスカレーション/{flag=1; next} /^## /{flag=0} flag {print}' .ai/review.md | sed '/^[[:space:]]*$/d' | head -n 3)"
 
           if printf '%s' "$VERDICT" | grep -q '🟢'; then
             STATUS="PR成功 / マージOK"
@@ -141,7 +143,8 @@ jobs:
           else
             STATUS="PR成功 / 要確認"
           fi
-          CONCERNS="$(printf '%s' "$CONCERNS" | tr '\n' ' ' | cut -c 1-500)"
+          TEST_RESULTS="$(printf '%s' "$TEST_RESULTS" | tr '\n' ' ' | cut -c 1-700)"
+          ESCALATION="$(printf '%s' "$ESCALATION" | tr '\n' ' ' | cut -c 1-500)"
 
           jq -n \
             --arg title "AIレビュー完了: PR #${PR_NUMBER}" \
@@ -151,7 +154,8 @@ jobs:
             --arg status "$STATUS" \
             --arg verdict "${VERDICT:-要確認}" \
             --arg score "${SCORE:-未採点}" \
-            --arg concerns "${CONCERNS:-大きな懸念なし}" \
+            --arg test_results "${TEST_RESULTS:-テスト結果なし}" \
+            --arg escalation "${ESCALATION:-なし}" \
             '{
               text: $title,
               blocks: [
@@ -165,7 +169,8 @@ jobs:
                     { type: "plain_text", text: ("スコア: " + $score) }
                   ]
                 },
-                { type: "section", text: { type: "plain_text", text: ("懸念点: " + $concerns) } },
+                { type: "section", text: { type: "plain_text", text: ("テスト結果: " + $test_results) } },
+                { type: "section", text: { type: "plain_text", text: ("人間へのエスカレーション: " + $escalation) } },
                 { type: "actions", elements: [ { type: "button", text: { type: "plain_text", text: "PRを開く" }, url: $pr_url } ] }
               ]
             }' > .ai/slack-payload.json
