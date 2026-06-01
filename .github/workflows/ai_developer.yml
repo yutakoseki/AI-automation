@@ -451,8 +451,8 @@ jobs:
             exit 1
           fi
 
-          # PR作成
-          export GH_TOKEN="${AI_PAT:-${{ secrets.GITHUB_TOKEN }}}"
+          # PR作成はGitHub ActionsのGITHUB_TOKENで行う。AI_PATはpush専用。
+          export GH_TOKEN="${{ secrets.GITHUB_TOKEN }}"
           {
             echo "## 課題の概要"
             echo
