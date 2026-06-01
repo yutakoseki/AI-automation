@@ -200,6 +200,7 @@ jobs:
           else
             STATUS="PR成功 / 要確認"
           fi
+          CONCERNS="$(printf '%s' "$CONCERNS" | tr '\n' ' ' | cut -c 1-500)"
 
           jq -n \
             --arg title "AIレビュー完了: PR #${PR_NUMBER}" \
@@ -213,27 +214,18 @@ jobs:
             '{
               text: $title,
               blocks: [
-                {
-                  type: "section",
-                  text: {
-                    type: "mrkdwn",
-                    text: ("*AIレビュー完了*\\n<" + $pr_url + "|PR #" + $pr_number + ": " + $pr_title + ">")
-                  }
-                },
+                { type: "header", text: { type: "plain_text", text: "AIレビュー完了" } },
+                { type: "section", text: { type: "plain_text", text: ("PR #" + $pr_number + ": " + $pr_title) } },
                 {
                   type: "section",
                   fields: [
-                    { type: "mrkdwn", text: ("*状態 / 判定*\\n" + $status + "\\n" + $verdict) },
-                    { type: "mrkdwn", text: ("*スコア*\\n" + $score) }
+                    { type: "plain_text", text: ("状態: " + $status) },
+                    { type: "plain_text", text: ("判定: " + $verdict) },
+                    { type: "plain_text", text: ("スコア: " + $score) }
                   ]
                 },
-                {
-                  type: "section",
-                  text: {
-                    type: "mrkdwn",
-                    text: ("*懸念点*\\n" + $concerns)
-                  }
-                }
+                { type: "section", text: { type: "plain_text", text: ("懸念点: " + $concerns) } },
+                { type: "actions", elements: [ { type: "button", text: { type: "plain_text", text: "PRを開く" }, url: $pr_url } ] }
               ]
             }' > .ai/slack-payload.json
 
@@ -260,15 +252,23 @@ jobs:
 
           PR_LABEL="PR #${PR_NUMBER:-unknown}: ${PR_TITLE:-unknown}"
           jq -n \
-            --arg title "AI Reviewer failed" \
+            --arg title "AI Reviewer が停止しました" \
             --arg pr "$PR_LABEL" \
             --arg run_url "$RUN_URL" \
             '{
               text: $title,
               blocks: [
-                { type: "section", text: { type: "mrkdwn", text: "*AIパイプライン停止*\\n*フェーズ:* Reviewer\\n*状態:* 失敗" } },
-                { type: "section", text: { type: "mrkdwn", text: ("*対象:* " + $pr + "\\n*理由:* Reviewerの実行または通知に失敗しました。") } },
-                { type: "section", text: { type: "mrkdwn", text: ("<" + $run_url + "|Actionsログを開く>") } }
+                { type: "header", text: { type: "plain_text", text: "AIパイプライン停止" } },
+                {
+                  type: "section",
+                  fields: [
+                    { type: "plain_text", text: "フェーズ: Reviewer" },
+                    { type: "plain_text", text: "状態: 失敗" }
+                  ]
+                },
+                { type: "section", text: { type: "plain_text", text: ("対象: " + $pr) } },
+                { type: "section", text: { type: "plain_text", text: "理由: Reviewerの実行または通知に失敗しました。" } },
+                { type: "actions", elements: [ { type: "button", text: { type: "plain_text", text: "Actionsログを開く" }, url: $run_url } ] }
               ]
             }' > .ai/slack-failure-payload.json
 

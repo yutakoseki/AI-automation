@@ -60,6 +60,7 @@ jobs:
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_KEY }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          AI_PAT: ${{ secrets.AI_PAT }}
         run: |
           set -euo pipefail
 
@@ -325,8 +326,9 @@ jobs:
 
           rm -f .ai/build.log .ai/build-sanitized.log .ai/build-focused.log .ai/repair.md .ai/fix-request.md
 
-          # GITHUB_TOKENでブランチをpushする
-          git remote set-url origin "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
+          # AI_PATがあればworkflowファイル変更にも対応できる。なければGITHUB_TOKENで試す。
+          PUSH_TOKEN="${AI_PAT:-${{ secrets.GITHUB_TOKEN }}}"
+          git remote set-url origin "https://x-access-token:${PUSH_TOKEN}@github.com/${{ github.repository }}.git"
 
           # 変更をステージング
           git add .
@@ -334,11 +336,23 @@ jobs:
           git commit -m "feat: implemented by AI for Issue #${ISSUE_NUMBER}"
 
           # ブランチをプッシュ
-          git push -f origin "$BRANCH_NAME"
+          if ! git push -f origin "$BRANCH_NAME" 2> .ai/push-error.log; then
+            {
+              echo "Generated implementation passed evaluation, but branch push failed."
+              echo
+              echo "## Push error"
+              echo '```'
+              sed -n '1,120p' .ai/push-error.log
+              echo '```'
+              echo
+              echo "This often happens when the generated diff changes files under .github/workflows/ and the token does not have the workflows permission."
+            } > .ai/failure-reason.md
+            exit 1
+          fi
 
           # PR作成
-          export GH_TOKEN="${{ secrets.GITHUB_TOKEN }}"
-          PR_URL="$(gh pr create --title "[AI] ${ISSUE_TITLE}" --body "
+          export GH_TOKEN="${AI_PAT:-${{ secrets.GITHUB_TOKEN }}}"
+          if ! PR_URL="$(gh pr create --title "[AI] ${ISSUE_TITLE}" --body "
           ## 課題の概要
           Closes #${ISSUE_NUMBER}
           Issueに基づき、AIが自律開発を行いました。
@@ -354,7 +368,17 @@ jobs:
 
           ## 注意事項
           - AI生成コードです。Evaluator を通過した場合のみPR化されています。
-          " --base main --head "$BRANCH_NAME")"
+          " --base main --head "$BRANCH_NAME" 2> .ai/pr-create-error.log)"; then
+            {
+              echo "Generated implementation passed evaluation and branch push, but PR creation failed."
+              echo
+              echo "## PR creation error"
+              echo '```'
+              sed -n '1,120p' .ai/pr-create-error.log
+              echo '```'
+            } > .ai/failure-reason.md
+            exit 1
+          fi
 
           PR_NUMBER="${PR_URL##*/}"
           jq -n \
@@ -399,23 +423,34 @@ jobs:
             ISSUE_NUMBER="$(jq -r '.issue_number // "unknown"' .ai/plan.json)"
             ISSUE_TITLE="$(jq -r '.summary // "unknown"' .ai/plan.json)"
           fi
-          if [ -f .ai/verdict.json ]; then
+          if [ -f .ai/failure-reason.md ]; then
+            REASON="$(sed -n '1,16p' .ai/failure-reason.md | tr '\n' ' ')"
+          elif [ -f .ai/verdict.json ]; then
             REASON="$(jq -r '.reason // "Evaluator rejected the implementation."' .ai/verdict.json)"
           elif [ -f .ai/evaluation.md ]; then
             REASON="$(sed -n '1,12p' .ai/evaluation.md | tr '\n' ' ')"
           fi
+          REASON="$(printf '%s' "$REASON" | tr '\n' ' ' | cut -c 1-700)"
 
           jq -n \
-            --arg title "AI Generator failed for Issue #${ISSUE_NUMBER}" \
+            --arg title "AI Generator / Evaluator が停止しました" \
             --arg issue "#${ISSUE_NUMBER}: ${ISSUE_TITLE}" \
             --arg reason "$REASON" \
             --arg run_url "$RUN_URL" \
             '{
               text: $title,
               blocks: [
-                { type: "section", text: { type: "mrkdwn", text: "*AIパイプライン停止*\\n*フェーズ:* Generator / Evaluator\\n*状態:* 失敗" } },
-                { type: "section", text: { type: "mrkdwn", text: ("*Issue:* " + $issue + "\\n*理由:* " + $reason) } },
-                { type: "section", text: { type: "mrkdwn", text: ("<" + $run_url + "|Actionsログを開く>") } }
+                { type: "header", text: { type: "plain_text", text: "AIパイプライン停止" } },
+                {
+                  type: "section",
+                  fields: [
+                    { type: "plain_text", text: "フェーズ: Generator / Evaluator" },
+                    { type: "plain_text", text: "状態: 失敗" }
+                  ]
+                },
+                { type: "section", text: { type: "plain_text", text: ("Issue: " + $issue) } },
+                { type: "section", text: { type: "plain_text", text: ("理由: " + $reason) } },
+                { type: "actions", elements: [ { type: "button", text: { type: "plain_text", text: "Actionsログを開く" }, url: $run_url } ] }
               ]
             }' > .ai/slack-failure-payload.json
 

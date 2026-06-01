@@ -274,9 +274,10 @@ jobs:
             STATUS="Planner停止 / 要確認"
             DETAIL="$(jq -r '.question // "追加確認が必要です。"' .ai/needs-info.json)"
           fi
+          DETAIL="$(printf '%s' "$DETAIL" | tr '\n' ' ' | cut -c 1-500)"
 
           jq -n \
-            --arg title "AI Planner failed for Issue #${ISSUE_NUMBER}" \
+            --arg title "AI Planner が停止しました" \
             --arg status "$STATUS" \
             --arg issue "#${ISSUE_NUMBER}: ${ISSUE_TITLE}" \
             --arg detail "$DETAIL" \
@@ -284,9 +285,17 @@ jobs:
             '{
               text: $title,
               blocks: [
-                { type: "section", text: { type: "mrkdwn", text: ("*AIパイプライン停止*\\n*フェーズ:* Planner\\n*状態:* " + $status) } },
-                { type: "section", text: { type: "mrkdwn", text: ("*Issue:* " + $issue + "\\n*理由:* " + $detail) } },
-                { type: "section", text: { type: "mrkdwn", text: ("<" + $run_url + "|Actionsログを開く>") } }
+                { type: "header", text: { type: "plain_text", text: "AIパイプライン停止" } },
+                {
+                  type: "section",
+                  fields: [
+                    { type: "plain_text", text: ("フェーズ: Planner") },
+                    { type: "plain_text", text: ("状態: " + $status) }
+                  ]
+                },
+                { type: "section", text: { type: "plain_text", text: ("Issue: " + $issue) } },
+                { type: "section", text: { type: "plain_text", text: ("理由: " + $detail) } },
+                { type: "actions", elements: [ { type: "button", text: { type: "plain_text", text: "Actionsログを開く" }, url: $run_url } ] }
               ]
             }' > .ai/slack-failure-payload.json
 
