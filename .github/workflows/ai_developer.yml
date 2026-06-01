@@ -107,8 +107,10 @@ jobs:
             npm install
           fi
 
+          LAST_REPAIR_NOTE=""
+          MAX_REPAIR_ATTEMPTS=8
           if ! npm run build > .ai/build.log 2>&1; then
-            for attempt in 1 2 3 4; do
+            for attempt in $(seq 1 "$MAX_REPAIR_ATTEMPTS"); do
               REPAIR_ATTEMPTS="$attempt"
               sed -E '/https?:\/\//d; /Next.js now collects completely anonymous telemetry/d; /No build cache found/d; /npm fund/d; /npm audit/d; /vulnerabilities/d' .ai/build.log > .ai/build-sanitized.log
               if grep -q 'Failed to compile' .ai/build-sanitized.log; then
@@ -117,26 +119,95 @@ jobs:
                 cp .ai/build-sanitized.log .ai/build-focused.log
               fi
 
+              mapfile -t ERROR_FILES < <(grep -Eo '([A-Za-z0-9_.-]+/)+[A-Za-z0-9_.-]+\.(ts|tsx|js|jsx|css|json)' .ai/build-focused.log | sort -u || true)
+              mapfile -t CHANGED_REPAIR_FILES < <(git diff --name-only -- ':!.ai' | grep -E '\.(ts|tsx|js|jsx|css|json|config\.js)$' || true)
+              mapfile -t PLAN_REPAIR_FILES < <(sed '/^[[:space:]]*$/d' .ai/target-files.txt | grep -E '\.(ts|tsx|js|jsx|css|json|config\.js)$' || true)
+
               {
                 echo "# Repair request"
                 echo
                 cat .github/ai-harness/generator-repair.md
                 echo
                 echo "The implementation generated from .ai/plan.md failed npm run build."
-                echo "This is repair attempt ${attempt} of 4."
+                echo "This is repair attempt ${attempt} of ${MAX_REPAIR_ATTEMPTS}."
+                if [ -n "$LAST_REPAIR_NOTE" ]; then
+                  echo
+                  echo "## Previous repair note"
+                  echo "$LAST_REPAIR_NOTE"
+                fi
+                echo
+                echo "## Plan JSON"
+                echo '```json'
+                jq '.' .ai/plan.json
+                echo '```'
                 echo
                 echo "## Build log"
                 echo '```'
                 sed -n '1,220p' .ai/build-focused.log
                 echo '```'
+                echo
+                echo "## Current git diff"
+                echo '```diff'
+                git diff -- ':!.ai' | sed -n '1,700p'
+                echo '```'
+                echo
+                echo "## Error file snippets"
+                if [ "${#ERROR_FILES[@]}" -gt 0 ]; then
+                  for file in "${ERROR_FILES[@]}"; do
+                    if [ -f "$file" ]; then
+                      echo
+                      echo "### ${file}"
+                      echo '```'
+                      nl -ba "$file" | sed -n '1,260p'
+                      echo '```'
+                    fi
+                  done
+                else
+                  echo "No specific error file could be extracted from the build log. Inspect the changed files."
+                fi
+                echo
+                echo "## Changed file snippets"
+                if [ "${#CHANGED_REPAIR_FILES[@]}" -gt 0 ]; then
+                  for file in "${CHANGED_REPAIR_FILES[@]}"; do
+                    if [ -f "$file" ]; then
+                      echo
+                      echo "### ${file}"
+                      echo '```'
+                      nl -ba "$file" | sed -n '1,260p'
+                      echo '```'
+                    fi
+                  done
+                else
+                  echo "No changed source files could be listed."
+                fi
               } > .ai/repair.md
 
-              mapfile -t REPAIR_FILES < <(git diff --name-only -- ':!.ai' | grep -E '\.(ts|tsx|js|jsx|css|json|config\.js)$' || true)
+              mapfile -t REPAIR_FILES < <(
+                {
+                  if [ "${#ERROR_FILES[@]}" -gt 0 ]; then
+                    printf '%s\n' "${ERROR_FILES[@]}"
+                  fi
+                  if [ "${#CHANGED_REPAIR_FILES[@]}" -gt 0 ]; then
+                    printf '%s\n' "${CHANGED_REPAIR_FILES[@]}"
+                  fi
+                  if [ "${#PLAN_REPAIR_FILES[@]}" -gt 0 ]; then
+                    printf '%s\n' "${PLAN_REPAIR_FILES[@]}"
+                  fi
+                } | sed '/^[[:space:]]*$/d' | sort -u | grep -E '\.(ts|tsx|js|jsx|css|json|config\.js)$' || true
+              )
               if [ "${#REPAIR_FILES[@]}" -eq 0 ]; then
                 mapfile -t REPAIR_FILES < <(sed '/^[[:space:]]*$/d' .ai/target-files.txt)
               fi
 
+              DIFF_BEFORE="$(git diff -- ':!.ai' | git hash-object --stdin)"
               aider "${REPAIR_FILES[@]}" --message-file .ai/repair.md --yes --no-auto-commits
+              DIFF_AFTER="$(git diff -- ':!.ai' | git hash-object --stdin)"
+
+              if [ "$DIFF_BEFORE" = "$DIFF_AFTER" ]; then
+                LAST_REPAIR_NOTE="The previous repair attempt did not change the git diff. Make a concrete code change based on the build log and file snippets."
+              else
+                LAST_REPAIR_NOTE=""
+              fi
 
               if npm run build > .ai/build.log 2>&1; then
                 break

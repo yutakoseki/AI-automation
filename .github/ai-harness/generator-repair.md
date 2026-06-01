@@ -9,6 +9,10 @@ You are repairing code produced by the Generator agent.
 - Preserve the implementation intent from `.ai/plan.md`.
 - Keep the patch minimal and reviewable.
 - Prefer the smallest type-safe change that restores a passing build.
+- If the request includes numbered file snippets, inspect the whole relevant snippet before editing.
+- If a previous repair attempt made no meaningful change, choose a different concrete fix instead of repeating the same replacement.
+- Use the current git diff to understand the implementation before patching.
+- If an error mentions a component prop or type signature, inspect both the component definition and its callers.
 
 ## Restrictions
 - Do not add unrelated features.
@@ -18,3 +22,4 @@ You are repairing code produced by the Generator agent.
 - Do not browse the web.
 - Do not run shell commands.
 - Only edit files.
+- For JSX/TSX syntax errors, check tag balance, component return structure, prop type signatures, and parentheses before changing business logic.
