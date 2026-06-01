@@ -1,2 +1,5 @@
+types/todo.ts
 components/AddTodoModal.tsx
 components/EditTodoModal.tsx
+components/TodoItem.tsx
+pages/index.tsx

@@ -4,5 +4,6 @@ export type Todo = {
   title: string;
   details: string;
   deadline: string;
+  tags: string[];
   completed: boolean;
 };

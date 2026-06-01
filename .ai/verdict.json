@@ -1,24 +1,107 @@
 {
   "approved": true,
-  "reason": "Implementation produced a diff and npm run build passed.",
+  "reason": "Generator produced buildable code and evaluator checks passed.",
   "metrics": {
-    "changed_file_count": 2,
-    "target_match_count": 2,
+    "changed_file_count": 5,
+    "target_match_count": 5,
     "unplanned_file_count": 0,
-    "repair_attempts": 0
+    "repair_attempts": 3,
+    "evaluator_fix_attempts": 0
   },
   "checks": {
     "generated_diff": true,
     "touched_planner_target": true,
     "build_passed": true
   },
+  "test_results": {
+    "required": [
+      {
+        "id": "REQ-1",
+        "description": "types/todo.ts の Todo 型に tags: string[] フィールドが追加されている。",
+        "verification_method": "static",
+        "acceptance": "Todo 型定義に tags: string[] が含まれる。",
+        "status": "passed"
+      },
+      {
+        "id": "REQ-2",
+        "description": "AddTodoModal にタグ入力欄と対応するラベルが追加されている。",
+        "verification_method": "diff",
+        "acceptance": "AddTodoModal.tsx の JSX 内にタグ用 input/textarea とラベルテキスト（例: 'タグ（カンマ区切り）'）が存在する。",
+        "status": "passed"
+      },
+      {
+        "id": "REQ-3",
+        "description": "EditTodoModal にタグ入力欄があり、既存 todo.tags がカンマ区切り文字列として初期値に展開される。",
+        "verification_method": "diff",
+        "acceptance": "EditTodoModal.tsx で useState の初期値が (todo.tags ?? []).join(', ') 相当になっており、入力欄が描画される。",
+        "status": "passed"
+      },
+      {
+        "id": "REQ-4",
+        "description": "タグ文字列はカンマで分割、各要素 trim、空文字除外、重複除去された string[] として onAdd / onSave に渡される。",
+        "verification_method": "static",
+        "acceptance": "両モーダルの送信処理に split(',') + map(trim) + filter(空除外) + 重複排除（Set 等）が実装されている。",
+        "status": "passed"
+      },
+      {
+        "id": "REQ-5",
+        "description": "TodoItem が todo.tags をバッジ要素として並べて表示し、空配列のときは何も描画しない。",
+        "verification_method": "diff",
+        "acceptance": "TodoItem.tsx で tags 配列を map してバッジ用 span を描画する分岐があり、length === 0 のときはバッジ領域を出さない。",
+        "status": "passed"
+      },
+      {
+        "id": "REQ-6",
+        "description": "タグ未入力でも、タイトル・詳細・期限が入力されていれば追加・編集が成立する。",
+        "verification_method": "static",
+        "acceptance": "両モーダルのバリデーションで tags の有無は不要条件として扱われており、タグ空のケースで onAdd / onSave が呼ばれる。",
+        "status": "passed"
+      },
+      {
+        "id": "REQ-7",
+        "description": "Next.js のプロダクションビルドが成功する。",
+        "verification_method": "build",
+        "acceptance": "npm run build が型エラー・コンパイルエラーなく完了する。",
+        "status": "passed"
+      }
+    ],
+    "optional": [
+      {
+        "id": "OPT-1",
+        "description": "タグバッジのデザインがライト／ダークモード両対応で視認性が高い。",
+        "verification_method": "manual",
+        "acceptance": "ダークモード切替時にコントラストが保たれるクラスが当たっている。",
+        "status": "optional"
+      },
+      {
+        "id": "OPT-2",
+        "description": "タグ入力欄にヘルプテキストが aria-describedby で関連付けられている。",
+        "verification_method": "diff",
+        "acceptance": "両モーダルの input に aria-describedby が設定され、対応する説明テキストノードが存在する。",
+        "status": "optional"
+      },
+      {
+        "id": "OPT-3",
+        "description": "タグ正規化処理が再利用可能な形に整理されている。",
+        "verification_method": "reviewer",
+        "acceptance": "split/trim/dedupe が 1 つの小さな関数にまとまっており、同一ファイル内で再利用されている。",
+        "status": "optional"
+      }
+    ]
+  },
   "changed_files": [
     "components/AddTodoModal.tsx",
-    "components/EditTodoModal.tsx"
+    "components/EditTodoModal.tsx",
+    "components/TodoItem.tsx",
+    "pages/index.tsx",
+    "types/todo.ts"
   ],
   "matched_target_files": [
     "components/AddTodoModal.tsx",
-    "components/EditTodoModal.tsx"
+    "components/EditTodoModal.tsx",
+    "components/TodoItem.tsx",
+    "pages/index.tsx",
+    "types/todo.ts"
   ],
   "unplanned_files": [],
   "blocking_issues": []

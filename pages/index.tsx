@@ -36,10 +36,10 @@ export default function Home() {
       prev.map((todo) => ({ ...todo, completed: true }))
     );
   };
-  const handleAdd = (title: string, details: string, deadline: string) => {
+  const handleAdd = (title: string, details: string, deadline: string, tags: string[]) => {
     setTodos((prev) => [
       ...prev,
-      { id: createId(), title, details, deadline, completed: false },
+      { id: createId(), title, details, deadline, tags, completed: false },
     ]);
   };
 
@@ -57,7 +57,8 @@ export default function Home() {
     id: string,
     newTitle: string,
     newDetails: string,
-    newDeadline: string
+    newDeadline: string,
+    newTags: string[]
   ) => {
     setTodos((prev) =>
       prev.map((todo) =>
@@ -67,6 +68,7 @@ export default function Home() {
               title: newTitle,
               details: newDetails,
               deadline: newDeadline,
+              tags: newTags,
             }
           : todo
       )
