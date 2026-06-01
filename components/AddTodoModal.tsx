@@ -1,7 +1,8 @@
 import { useState } from "react";
+import { parseTags } from "@/lib/parseTags";
 
 type AddTodoModalProps = {
-  onAdd: (title: string, details: string, deadline: string) => void;
+  onAdd: (title: string, details: string, deadline: string, tags: string[]) => void;
   onClose: () => void;
 };
 
@@ -10,13 +11,16 @@ export default function AddTodoModal({ onAdd, onClose }: AddTodoModalProps) {
   const [details, setDetails] = useState("");
   const [deadline, setDeadline] = useState("");
 
+  const [tagsInput, setTagsInput] = useState("");
+
   const handleAdd = () => {
+    const tags = parseTags(tagsInput);
     const trimmedTitle = title.trim();
     const trimmedDetails = details.trim();
     const trimmedDeadline = deadline.trim();
     if (!trimmedTitle || !trimmedDetails || !trimmedDeadline) return;
 
-    onAdd(trimmedTitle, trimmedDetails, trimmedDeadline);
+    onAdd(trimmedTitle, trimmedDetails, trimmedDeadline, tags);
     setTitle("");
     setDetails("");
     setDeadline("");
@@ -45,6 +49,13 @@ export default function AddTodoModal({ onAdd, onClose }: AddTodoModalProps) {
           value={deadline}
           onChange={(e) => setDeadline(e.target.value)}
           className="w-full mb-2 p-2 border rounded text-gray-900 placeholder-gray-500"
+        />
+        <input
+          type="text"
+          value={tagsInput}
+          onChange={(e) => setTagsInput(e.target.value)}
+          placeholder="タグ（カンマ区切り）"
+          className="w-full mb-2 p-2 border border-gray-300 dark:border-gray-600 rounded text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
         />
         <div className="flex justify-end space-x-2">
           <button onClick={handleAdd} className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-1 px-2 rounded focus:outline-none focus:ring-2 focus:ring-blue-400">
