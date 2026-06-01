@@ -1,70 +1,70 @@
-# 実装計画: タスク追加・編集モーダルのダーク化＆デザイン統一
+# 実装計画: TODO追加時のバリデーション/アラート表示
 
 ## Issue 概要
-タスク追加 (`components/AddTodoModal.tsx`) と編集 (`components/EditTodoModal.tsx`) のモーダルが、ハードコードされた白背景 (`bg-white`) と固定のグレー系テキストで描画されており、アプリ全体で適用されているダークモード (`pages/index.tsx`, `components/TodoItem.tsx`, `styles/globals.css` の `dark:` 系クラス) と統一されていない。両モーダルを既存のダーク配色 (`dark:bg-gray-900`, `dark:bg-gray-800`, `dark:text-gray-100` 等) と整合させ、フォーム・ボタンのトーン、レスポンシブ、アクセシビリティも軽く整える。
+`components/AddTodoModal.tsx` の `handleAdd` は、いずれかの入力 (title / details / deadline) が空のとき何のフィードバックも出さず黙って `return` している。ユーザーは「追加」を押しても何も起きないように見え、何が未入力なのかも分からない。各項目ごとに日本語のバリデーションメッセージを画面上に表示し、エラー時は追加処理を行わずにリトライ可能とする。
 
 ## 最小の安全なスライス
-両モーダルコンポーネントの className のみを更新する。Props・state・コールバック・ロジックには触れない。新規ファイル追加や共通化リファクタは行わない。`tailwind.config.js`・`postcss.config.js`・`styles/globals.css` も変更しない (現状の `media` ベースのダーク戦略を維持)。
+- `components/AddTodoModal.tsx` のみを変更する。
+- フィールドエラー state を持ち、`handleAdd` 内でフィールド単位の検証を行い、エラーがあれば `onAdd` を呼ばずモーダルも閉じない。
+- 各入力の直下に `role="alert"` 付きの日本語エラーメッセージを描画。
+- 入力 (`onChange`) で該当フィールドのエラーをクリア。
+- アクセシビリティ属性 (`aria-invalid`, `aria-describedby`) を追加し、各 input には対応する `<label htmlFor>` を関連付ける。
+- 既存の Tailwind スタイルとダーク配色はそのまま踏襲する。
 
 ## 対象ファイル
 - `components/AddTodoModal.tsx`
-- `components/EditTodoModal.tsx`
 
-## 必要な変更
-両ファイルに同じパターンを適用する (見出し id とラベルだけ別)。
+## 必要な変更 (components/AddTodoModal.tsx)
 
-1. **オーバーレイ** `<div className="fixed inset-0 ...">`
-   - 既存: `bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full`
-   - 追加: `dark:bg-black dark:bg-opacity-60`
-   - アクセシビリティ属性を追加: `role="dialog"`, `aria-modal="true"`, `aria-labelledby="add-todo-modal-title"` (Add 側) / `aria-labelledby="edit-todo-modal-title"` (Edit 側)。
+1. **state 追加**
+   - `const [errors, setErrors] = useState<{ title?: string; details?: string; deadline?: string }>({})`
 
-2. **パネル** `<div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">`
-   - 置換: `border` → `border border-gray-200 dark:border-gray-700`
-   - 置換: `bg-white` → `bg-white dark:bg-gray-900` (index.tsx のメインカードと揃える)
-   - 置換: `w-96` → `w-11/12 max-w-md` (狭幅でのはみ出し回避)
+2. **`handleAdd` の改修**
+   - 既存の `if (!trimmedTitle || !trimmedDetails || !trimmedDeadline) return;` を削除。
+   - 各フィールドを個別に検査し、未入力なら以下の文言を `nextErrors` に格納:
+     - `title`: 「タイトルを入力してください」
+     - `details`: 「詳細を入力してください」
+     - `deadline`: 「期限を入力してください」
+   - `Object.keys(nextErrors).length > 0` の場合は `setErrors(nextErrors)` してリターン。
+   - 成功時は `setErrors({})` してから `onAdd(...)` / state クリア / `onClose()`。
 
-3. **見出し** `<h2 ...>`
-   - 置換: `text-gray-900` → `text-gray-900 dark:text-gray-100`
-   - 追加: `id="add-todo-modal-title"` / `id="edit-todo-modal-title"`
+3. **各入力に `<label>`、エラー描画を追加**
+   - title: `<label htmlFor="add-todo-title">タイトル</label>`、`<input id="add-todo-title" aria-invalid={!!errors.title} aria-describedby={errors.title ? "add-todo-title-error" : undefined} />`、エラーは `<p id="add-todo-title-error" role="alert" className="text-sm text-red-600 dark:text-red-400">{errors.title}</p>` を `errors.title` がある時のみ表示。
+   - details / deadline も同様の id 規約 (`add-todo-details`, `add-todo-deadline`) で同パターンを適用。
 
-4. **フォーム入力** (title input / details textarea / date input すべて)
-   - 置換: `border` → `border border-gray-300 dark:border-gray-600`
-   - 追加: `bg-white dark:bg-gray-800`
-   - 置換: `text-gray-900 placeholder-gray-500` → `text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400`
-   - 追加: `focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400`
+4. **`onChange` でエラー解除**
+   - 各 input の `onChange` で値設定後、`setErrors((prev) => ({ ...prev, <field>: undefined }))` を呼ぶ。
 
-5. **ボタン**
-   - プライマリ (`追加` / `保存`): 既存 `bg-blue-500 hover:bg-blue-700` は維持し、`focus:outline-none focus:ring-2 focus:ring-blue-400` を追加。
-   - セカンダリ (`キャンセル`): `bg-gray-500 hover:bg-gray-700` を `bg-gray-500 hover:bg-gray-600 dark:bg-gray-700 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-400` に変更。
+5. **既存スタイル**
+   - 現状の Tailwind クラスとダーク対応はそのまま維持。エラー時のリングや枠線色は追加しない (スコープを限定)。
 
 ## 受け入れ条件
-- ダークモードで両モーダルのパネル背景・テキスト・入力・ボタンが暗系トーンになり、`pages/index.tsx` 内のカード (`dark:bg-gray-900`) と視覚的に同系統になる。
-- ライトモードでも違和感がない (既存の白系トーンを保つ)。
-- 幅 360px のビューポートでも水平スクロールが発生しない。
-- フォーム入力とボタンがフォーカス時に視認可能なリングを表示する。
-- `<div role="dialog" aria-modal="true" aria-labelledby="…">` が両モーダルに付与され、見出しに対応する `id` が存在する。
-- Props・state・ハンドラのシグネチャに変更はない。
+- 3項目すべて空で「追加」を押すと、各入力の下に対応する日本語メッセージが表示される。
+- 1項目だけ空のときは、その項目のメッセージだけが表示される。
+- エラー表示中は `onAdd` が呼ばれず、モーダルが閉じない。
+- いずれかの入力に値を入れると、そのフィールドのエラーが消える。
+- `role="alert"` のメッセージにスクリーンリーダーがアクセスできる (`aria-describedby` で紐付け済み)。
+- 既存 props (`onAdd`, `onClose`) のシグネチャは変更されていない。
 - `npm run build` が成功する。
 
 ## 実行コマンド
 - `npm run build`
 
 ## リスク
-- `tailwind.config.js` を読まずに進めているが、本リポジトリは Tailwind v3 で既に `dark:` 系を多用しており、戦略は既定の `media`。後で `class` 戦略へ切り替えても同じ `dark:` クラスは動く。
-- `bg-opacity-*` は Tailwind v4 で廃止予定だが、v3 をピン留めしているので問題なし。
-- `<input type="date">` のカレンダーポップアップはブラウザ依存で完全には暗色化できない。フィールド本体のみテーマ適用される。
+- `placeholder` のダーク対応など既存スタイルの抜けがあるが、本Issueの主目的ではないため変更しない (スコープ外)。
+- `aria-describedby` の id は他のモーダルと衝突しないよう `add-todo-*` プレフィックスを用いる。
 
-## スコープ外 (後続)
-- `AddTodoModal` と `EditTodoModal` を共通 `<Modal>` コンポーネントへリファクタ。
-- ESC キーで閉じる / 背景クリックで閉じる / フォーカストラップ。
-- 明示的なダーク/ライト切替トグル UI の追加。
-- 日付ピッカーの完全な暗色化。
+## スコープ外
+- `components/EditTodoModal.tsx` への同様のバリデーション (別Issue推奨)。
+- 文字数上限・過去日付禁止などの高度なバリデーション。
+- AlertダイアログUIの新規導入 (インラインエラーで要件は満たす)。
+- i18n フレームワーク導入。
+- 共通 Form/Field コンポーネントへの抽出。
 
 ## Generator constraints
 - 自律的に実装し、人間の確認を待たない。
-- 計画が広い場合は本ドキュメントの最小スライスのみを実装する。
+- 計画外のファイルは変更しない。
 - 関係ない箇所のリファクタや大規模書き換えは行わない。
-- 計画外のファイル (`tailwind.config.js`, `styles/globals.css`, `pages/`, `types/` 等) は変更しない。
 
 ## Generator constraints
 - Implement the plan autonomously without asking for human clarification.

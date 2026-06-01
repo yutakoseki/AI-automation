@@ -1,2 +1,1 @@
 components/AddTodoModal.tsx
-components/EditTodoModal.tsx
