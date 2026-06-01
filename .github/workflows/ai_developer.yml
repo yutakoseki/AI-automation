@@ -446,6 +446,8 @@ jobs:
               echo
               echo "This often happens when the generated diff changes files under .github/workflows/ and the token does not have the workflows permission."
             } > .ai/failure-reason.md
+            cat .ai/failure-reason.md
+            gh issue comment "$ISSUE_NUMBER" --body-file .ai/failure-reason.md || true
             exit 1
           fi
 
@@ -494,6 +496,8 @@ jobs:
               sed -n '1,120p' .ai/pr-create-error.log
               echo '```'
             } > .ai/failure-reason.md
+            cat .ai/failure-reason.md
+            gh issue comment "$ISSUE_NUMBER" --body-file .ai/failure-reason.md || true
             exit 1
           fi
 
