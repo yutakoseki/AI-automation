@@ -200,7 +200,7 @@ jobs:
               fi
 
               DIFF_BEFORE="$(git diff -- ':!.ai' | git hash-object --stdin)"
-              aider "${REPAIR_FILES[@]}" --message-file .ai/repair.md --yes --no-auto-commits
+              aider "${REPAIR_FILES[@]}" --message-file .ai/repair.md --yes --no-auto-commits --edit-format whole
               DIFF_AFTER="$(git diff -- ':!.ai' | git hash-object --stdin)"
 
               if [ "$DIFF_BEFORE" = "$DIFF_AFTER" ]; then
