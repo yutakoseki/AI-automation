@@ -13,7 +13,7 @@ You are repairing code produced by the Generator agent.
 - If a previous repair attempt made no meaningful change, choose a different concrete fix instead of repeating the same replacement.
 - Use the current git diff to understand the implementation before patching.
 - If an error mentions a component prop or type signature, inspect both the component definition and its callers.
-- Prefer replacing the full broken component/file structure over tiny SEARCH/REPLACE patches when the syntax tree is corrupted.
+- Prefer one concrete, minimal patch to the broken file instead of broad rewrites.
 
 ## Restrictions
 - Do not add unrelated features.
@@ -24,4 +24,4 @@ You are repairing code produced by the Generator agent.
 - Do not run shell commands.
 - Only edit files.
 - For JSX/TSX syntax errors, check tag balance, component return structure, prop type signatures, and parentheses before changing business logic.
-- For repeated JSX/TSX syntax failures, reconstruct the affected component as a valid complete file while preserving the planned behavior.
+- Never create new files during repair unless the build log explicitly says a required file is missing.

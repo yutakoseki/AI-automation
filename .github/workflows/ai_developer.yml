@@ -186,8 +186,7 @@ jobs:
                 {
                   if [ "${#ERROR_FILES[@]}" -gt 0 ]; then
                     printf '%s\n' "${ERROR_FILES[@]}"
-                  fi
-                  if [ "${#CHANGED_REPAIR_FILES[@]}" -gt 0 ]; then
+                  elif [ "${#CHANGED_REPAIR_FILES[@]}" -gt 0 ]; then
                     printf '%s\n' "${CHANGED_REPAIR_FILES[@]}"
                   fi
                   if [ "${#PLAN_REPAIR_FILES[@]}" -gt 0 ]; then
@@ -200,7 +199,11 @@ jobs:
               fi
 
               DIFF_BEFORE="$(git diff -- ':!.ai' | git hash-object --stdin)"
-              aider "${REPAIR_FILES[@]}" --message-file .ai/repair.md --yes --no-auto-commits --edit-format whole
+              aider "${REPAIR_FILES[@]}" --message-file .ai/repair.md --yes --no-auto-commits
+              if [ -e "}" ]; then
+                rm -f "}"
+                LAST_REPAIR_NOTE="The previous repair created an invalid file named }. Do not create new files; edit only the listed repair files."
+              fi
               DIFF_AFTER="$(git diff -- ':!.ai' | git hash-object --stdin)"
 
               if [ "$DIFF_BEFORE" = "$DIFF_AFTER" ]; then
